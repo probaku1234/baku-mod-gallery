@@ -1298,6 +1298,7 @@ dependencies = [
  "shuttle-runtime",
  "shuttle-secrets",
  "shuttle-shared-db",
+ "test-env-helpers",
  "testcontainers",
  "tokio",
  "tracing",
@@ -2417,6 +2418,16 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+
+[[package]]
+name = "test-env-helpers"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6ab8f4822c904dadef9dd99f228f58a10d1b2c6ece06b108257e72fea72b1c6"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "testcontainers"

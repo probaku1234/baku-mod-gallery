@@ -9,6 +9,7 @@ use futures::stream::TryStreamExt;
 use mongodb::bson::{Bson, DateTime};
 use mongodb::{bson::doc, options::FindOptions};
 use serde::{Deserialize, Serialize};
+use tracing::{debug, error, info};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Post {
@@ -40,7 +41,11 @@ pub async fn get_all_posts(
             let posts = cursor.try_collect().await.unwrap_or_else(|_| vec![]);
             Ok(Json(posts))
         },
-        Err(err) => Err((StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
+        Err(err) => {
+            let error_message = err.to_string();
+            error!("{}", error_message.clone());
+            Err((StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
+        }
     }
 }
 
@@ -60,9 +65,14 @@ pub async fn create_new_post(
 
     match typed_collection.insert_one(new_post, None).await {
         Ok(result) => {
+            info!("New Post Created");
             Ok(Json(result.inserted_id))
         },
-        Err(err) => Err((StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
+        Err(err) => {
+            let error_message = err.to_string();
+            error!("{}", error_message.clone());
+            Err((StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
+        }
     }
 }
 

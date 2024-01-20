@@ -1,4 +1,4 @@
-use crate::posts::get_all_posts;
+use crate::posts::{create_new_post, get_all_posts};
 use crate::AppState;
 use axum::{
     http::{self},
@@ -8,7 +8,9 @@ use axum::{
 };
 
 pub fn create_api_router(state: AppState) -> Router {
-    let posts_router = Router::new().route("/", get(get_all_posts));
+    let posts_router = Router::new()
+        .route("/", get(get_all_posts))
+        .route("/create", post(create_new_post));
 
     Router::new()
         .nest("/posts", posts_router)

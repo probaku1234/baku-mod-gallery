@@ -36,12 +36,17 @@ pub async fn get_all_posts(
 ) -> Result<Json<Vec<Post>>, impl IntoResponse> {
     let typed_collection = &state.mongo.collection::<Post>("posts");
 
-    let filter = doc! {};
-    let find_option = FindOptions::builder().build();
+    // let filter = doc! {};
+    // let find_option = FindOptions::builder().build();
 
-    match typed_collection.find(filter, find_option).await {
+    match typed_collection.find(None, None).await {
         Ok(cursor) => {
-            let posts = cursor.try_collect().await.unwrap_or_else(|_| vec![]);
+            // let posts = cursor.try_collect().await.unwrap_or_else(|_| vec![]);
+            let posts = cursor.try_collect().await.unwrap_or_else(|err| {
+                error!("{}", err.to_string());
+                vec![]
+            });
+
             Ok(Json(posts))
         }
         Err(err) => {

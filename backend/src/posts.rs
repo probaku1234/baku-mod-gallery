@@ -10,10 +10,9 @@ use axum::{
 };
 use futures::stream::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
-use mongodb::bson::{bson, Bson, DateTime};
-use mongodb::{bson::doc, options::FindOptions};
+use mongodb::bson::{Bson, DateTime, doc};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Post {
@@ -182,6 +181,45 @@ pub async fn edit_post(
     }
 }
 
+pub async fn delete_post(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, impl IntoResponse> {
+    let typed_collection = &state.mongo.collection::<Post>("posts");
+
+    let target_post_object_id_result = ObjectId::from_str(&id);
+
+    if target_post_object_id_result.is_err() {
+        let error_message = target_post_object_id_result.unwrap_err().to_string();
+        error!(error_message);
+
+        return Err((StatusCode::BAD_REQUEST, error_message).into_response());
+    }
+
+    let filter = doc! {
+        "_id": target_post_object_id_result.unwrap()
+    };
+
+    match typed_collection.find_one_and_delete(filter, None).await {
+        Ok(result) => match result {
+            Some(_) => Ok(StatusCode::OK),
+            None => {
+                error!("The post with id: {} not found!", id);
+                Err((
+                    StatusCode::NOT_FOUND,
+                    format!("The post with id: {} not found!", id),
+                )
+                    .into_response())
+            }
+        },
+        Err(err) => {
+            let error_message = err.to_string();
+            error!("{}", error_message.clone());
+            Err((StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
+        }
+    }
+}
+
 #[cfg(test)]
 use test_env_helpers::*;
 
@@ -193,9 +231,7 @@ mod tests {
         generate_port_number, get_db_connection_uri, get_mongo_image, populate_test_data,
     };
     use crate::AppState;
-    use axum::body::{Body, Bytes};
     use mongodb::Client;
-    use serde_json::{json, Value};
     use testcontainers::clients;
 
     async fn before_all() {
@@ -336,17 +372,16 @@ mod tests {
             fileUrl: updated_file_url.clone(),
         };
 
-        let temp = insert_result.inserted_id.as_object_id().unwrap();
-        let temppp = temp.clone();
-        let kk = temp.to_hex();
-        let result = edit_post(State(state), Path(kk), Json(edit_post_request)).await;
+        let inserted_post_object_id = insert_result.inserted_id.as_object_id().unwrap();
+        let object_id_string = inserted_post_object_id.to_hex();
+        let result = edit_post(State(state), Path(object_id_string), Json(edit_post_request)).await;
 
         assert!(result.is_ok());
 
         let updated_post = typed_collection
             .find_one(
                 doc! {
-                    "_id": temppp
+                    "_id": inserted_post_object_id
                 },
                 None,
             )
@@ -357,5 +392,47 @@ mod tests {
         assert_eq!(updated_post.title, updated_title);
         assert_eq!(updated_post.images_url, updated_image_url);
         assert_eq!(updated_post.file_url, updated_file_url);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_delete_post() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+
+        let state = AppState {
+            mongo: test_db.clone(),
+        };
+
+        let typed_collection = test_db.collection::<Post>("posts");
+        let new_post = Post {
+            title: "test post".to_string(),
+            images_url: vec![],
+            file_url: "test file url".to_string(),
+            created_at: DateTime::now(),
+            updated_at: DateTime::now(),
+        };
+
+        let insert_result = typed_collection.insert_one(new_post, None).await.unwrap();
+        let inserted_post_object_id = insert_result.inserted_id.as_object_id().unwrap();
+        let object_id_string = inserted_post_object_id.to_hex();
+        let result = delete_post(State(state), Path(object_id_string)).await;
+
+        assert!(result.is_ok());
+
+        let find_result = typed_collection.find_one(
+            doc! {
+                "_id": inserted_post_object_id
+            },
+            None).await;
+
+        let k = find_result.unwrap();
+
+        assert!(k.is_none());
     }
 }

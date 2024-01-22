@@ -1,8 +1,11 @@
 #[cfg(test)]
 pub mod test_util {
-    use std::net::UdpSocket;
+    use mongodb::{bson::doc, Database};
     use run_script::run_script;
+    use std::net::UdpSocket;
     use testcontainers::{GenericImage, RunnableImage};
+
+    use crate::posts::Post;
 
     pub fn generate_port_number() -> u16 {
         let address = "0.0.0.0:0";
@@ -12,16 +15,19 @@ pub mod test_util {
     }
 
     pub fn get_mongo_image(&port: &u16) -> RunnableImage<GenericImage> {
-        let image = GenericImage::new(
-            "mongo".to_string(),
-            "5.0.6".to_string(),
-        );
+        let image = GenericImage::new("mongo".to_string(), "5.0.6".to_string());
         RunnableImage::from(image).with_mapped_port((port, 27017))
     }
 
     pub fn populate_test_data(&port: &u16) {
-        let formatted_command = format!(r#" bash ./tests/test_data/import.sh {} {}"#, "0.0.0.0", port);
-        run_script!(formatted_command).expect("Cannot seed MongoDB data");
+        let formatted_command =
+            format!(r#" bash ./src/test_data/import.sh {} {}"#, "0.0.0.0", port);
+        let (code, output, error) =
+            run_script!(formatted_command).expect("Cannot seed MongoDB data");
+        println!("---run script---");
+        println!("code: {}", code);
+        println!("error: {}", error);
+        println!("output: {}", output);
     }
 
     pub fn get_db_connection_uri(&port: &u16) -> String {

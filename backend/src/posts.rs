@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::vec;
 
 use crate::AppState;
 use axum::response::IntoResponse;
@@ -27,8 +28,16 @@ pub struct Post {
 #[allow(non_snake_case)]
 pub struct NewPostRequest {
     title: String,
-    images_url: Vec<String>,
-    file_url: String,
+    imagesUrl: Vec<String>,
+    fileUrl: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[allow(non_snake_case)]
+pub struct EditPostRequest {
+    title: String,
+    imagesUrl: Vec<String>,
+    fileUrl: String,
 }
 
 pub async fn get_all_posts(
@@ -115,6 +124,56 @@ pub async fn create_new_post(
             info!("New Post Created");
             Ok(Json(result.inserted_id))
         }
+        Err(err) => {
+            let error_message = err.to_string();
+            error!("{}", error_message.clone());
+            Err((StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
+        }
+    }
+}
+
+pub async fn edit_post(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<EditPostRequest>,
+) -> Result<Json<Post>, impl IntoResponse> {
+    let typed_collection = &state.mongo.collection::<Post>("posts");
+
+    let target_post_object_id_result = ObjectId::from_str(&id);
+
+    if target_post_object_id_result.is_err() {
+        let error_message = target_post_object_id_result.unwrap_err().to_string();
+        error!(error_message);
+
+        return Err((StatusCode::BAD_REQUEST, error_message).into_response());
+    }
+
+    let filter = doc! {
+        "_id": target_post_object_id_result.unwrap()
+    };
+    let update = doc! {
+        "$set": doc! {
+            "title": req.title,
+            "images_url": req.imagesUrl,
+            "file_url": req.fileUrl,
+        }
+    };
+
+    match typed_collection
+        .find_one_and_update(filter, update, None)
+        .await
+    {
+        Ok(result) => match result {
+            Some(post) => Ok(Json(post)),
+            None => {
+                error!("The post with id: {} not found!", id);
+                Err((
+                    StatusCode::NOT_FOUND,
+                    format!("The post with id: {} not found!", id),
+                )
+                    .into_response())
+            }
+        },
         Err(err) => {
             let error_message = err.to_string();
             error!("{}", error_message.clone());

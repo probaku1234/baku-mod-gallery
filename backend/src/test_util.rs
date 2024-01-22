@@ -1,6 +1,9 @@
 #[cfg(test)]
 pub mod test_util {
-    use mongodb::{bson::doc, Database};
+    use mongodb::{
+        bson::{doc, oid::ObjectId},
+        Database,
+    };
     use run_script::run_script;
     use std::net::UdpSocket;
     use testcontainers::{GenericImage, RunnableImage};
@@ -32,5 +35,27 @@ pub mod test_util {
 
     pub fn get_db_connection_uri(&port: &u16) -> String {
         format!("mongodb://{}:{}", "0.0.0.0", port)
+    }
+
+    pub async fn insert_test_post(db: Database, new_post: Post) -> ObjectId {
+        let typed_collection = db.collection::<Post>("posts");
+
+        let insert_result = typed_collection.insert_one(new_post, None).await.unwrap();
+        insert_result.inserted_id.as_object_id().unwrap()
+    }
+
+    pub async fn find_post_by_id(db: Database, id: ObjectId) -> Option<Post> {
+        let typed_collection = db.collection::<Post>("posts");
+
+        let find_result = typed_collection
+            .find_one(
+                doc! {
+                    "_id": id
+                },
+                None,
+            )
+            .await;
+
+        find_result.unwrap()
     }
 }

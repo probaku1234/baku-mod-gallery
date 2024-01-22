@@ -10,7 +10,7 @@ use axum::{
 };
 use futures::stream::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
-use mongodb::bson::{Bson, DateTime, doc};
+use mongodb::bson::{doc, Bson, DateTime};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
@@ -228,12 +228,14 @@ use test_env_helpers::*;
 mod tests {
     use super::*;
     use crate::test_util::test_util::{
-        generate_port_number, get_db_connection_uri, get_mongo_image, populate_test_data,
+        find_post_by_id, generate_port_number, get_db_connection_uri, get_mongo_image,
+        insert_test_post, populate_test_data,
     };
     use crate::AppState;
     use mongodb::Client;
     use testcontainers::clients;
 
+    // TODO: util functios for create, get
     async fn before_all() {
         // let docker = clients::Cli::default();
         // let port = generate_port_number();
@@ -289,12 +291,53 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn test_get_post_by_id() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+
+        let state = AppState { mongo: test_db.clone() };
+
+        let new_post_title = "aa".to_string();
+        let new_post_images_url: Vec<String> = vec![];
+        let new_post_file_url = "aa".to_string();
+
+        let new_post = Post {
+            title: new_post_title.clone(),
+            images_url: new_post_images_url.clone(),
+            file_url: new_post_file_url.clone(),
+            created_at: DateTime::now(),
+            updated_at: DateTime::now(),
+        };
+
+        let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
+        let object_id_string = inserted_post_object_id.to_hex();
+
+        let result = get_post_by_id(
+            State(state),
+            Path(object_id_string)
+        ).await;
+
+        assert!(result.is_ok());
+
+        let found_post = result.ok().unwrap().0;
+
+        assert_eq!(found_post.title, new_post_title);
+        assert_eq!(found_post.images_url, new_post_images_url);
+        assert_eq!(found_post.file_url, new_post_file_url);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_create_new_posts() {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
         let _c = docker.run(mongo_img);
-        populate_test_data(&port);
         let uri = get_db_connection_uri(&port);
         let client = Client::with_uri_str(uri).await.unwrap();
 
@@ -317,18 +360,7 @@ mod tests {
         let inserted_id_json = result.ok().unwrap();
         let inserted_id = inserted_id_json.0.as_object_id().unwrap();
 
-        let typed_collection = test_db.collection::<Post>("posts");
-
-        let new_post = typed_collection
-            .find_one(
-                doc! {
-                    "_id": inserted_id
-                },
-                None,
-            )
-            .await
-            .unwrap()
-            .unwrap();
+        let new_post = find_post_by_id(test_db, inserted_id).await.unwrap();
 
         assert_eq!(new_post.title, new_post_title);
         assert_eq!(new_post.images_url, new_post_images_url);
@@ -341,7 +373,6 @@ mod tests {
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
         let _c = docker.run(mongo_img);
-        populate_test_data(&port);
         let uri = get_db_connection_uri(&port);
         let client = Client::with_uri_str(uri).await.unwrap();
 
@@ -351,8 +382,6 @@ mod tests {
             mongo: test_db.clone(),
         };
 
-        let typed_collection = test_db.collection::<Post>("posts");
-
         let new_post = Post {
             title: "test post".to_string(),
             images_url: vec![],
@@ -361,7 +390,6 @@ mod tests {
             updated_at: DateTime::now(),
         };
 
-        let insert_result = typed_collection.insert_one(new_post, None).await.unwrap();
         let updated_title = "updated test post".to_string();
         let updated_image_url = vec!["one two three".to_string()];
         let updated_file_url = "updated file url".to_string();
@@ -372,21 +400,19 @@ mod tests {
             fileUrl: updated_file_url.clone(),
         };
 
-        let inserted_post_object_id = insert_result.inserted_id.as_object_id().unwrap();
+        let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
         let object_id_string = inserted_post_object_id.to_hex();
-        let result = edit_post(State(state), Path(object_id_string), Json(edit_post_request)).await;
+        let result = edit_post(
+            State(state),
+            Path(object_id_string),
+            Json(edit_post_request),
+        )
+        .await;
 
         assert!(result.is_ok());
 
-        let updated_post = typed_collection
-            .find_one(
-                doc! {
-                    "_id": inserted_post_object_id
-                },
-                None,
-            )
+        let updated_post = find_post_by_id(test_db, inserted_post_object_id)
             .await
-            .unwrap()
             .unwrap();
 
         assert_eq!(updated_post.title, updated_title);
@@ -409,7 +435,6 @@ mod tests {
             mongo: test_db.clone(),
         };
 
-        let typed_collection = test_db.collection::<Post>("posts");
         let new_post = Post {
             title: "test post".to_string(),
             images_url: vec![],
@@ -418,21 +443,14 @@ mod tests {
             updated_at: DateTime::now(),
         };
 
-        let insert_result = typed_collection.insert_one(new_post, None).await.unwrap();
-        let inserted_post_object_id = insert_result.inserted_id.as_object_id().unwrap();
+        let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
         let object_id_string = inserted_post_object_id.to_hex();
         let result = delete_post(State(state), Path(object_id_string)).await;
 
         assert!(result.is_ok());
 
-        let find_result = typed_collection.find_one(
-            doc! {
-                "_id": inserted_post_object_id
-            },
-            None).await;
+        let find_result = find_post_by_id(test_db, inserted_post_object_id).await;
 
-        let k = find_result.unwrap();
-
-        assert!(k.is_none());
+        assert!(find_result.is_none());
     }
 }

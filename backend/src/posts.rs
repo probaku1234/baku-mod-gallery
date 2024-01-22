@@ -113,8 +113,8 @@ pub async fn create_new_post(
 
     let new_post = Post {
         title: req.title,
-        images_url: req.images_url,
-        file_url: req.file_url,
+        images_url: req.imagesUrl,
+        file_url: req.fileUrl,
         created_at: DateTime::now(),
         updated_at: DateTime::now(),
     };
@@ -193,6 +193,7 @@ mod tests {
         generate_port_number, get_db_connection_uri, get_mongo_image, populate_test_data,
     };
     use crate::AppState;
+    use axum::body::{Body, Bytes};
     use mongodb::Client;
     use serde_json::{json, Value};
     use testcontainers::clients;
@@ -221,6 +222,8 @@ mod tests {
         let result = get_all_posts(State(state)).await;
 
         assert!(result.is_ok());
+
+        // FIXME: currently not working as intended
         // FIXME: how to assert json data
         // let body: Value = serde_json::to_vec(result.unwrap());
         // assert_eq!(result.unwrap()., Json(vec![]));
@@ -261,15 +264,98 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState { mongo: test_db };
+        let state = AppState {
+            mongo: test_db.clone(),
+        };
+        let new_post_title = "aa".to_string();
+        let new_post_images_url: Vec<String> = vec![];
+        let new_post_file_url = "aa".to_string();
+
         let new_post_request = NewPostRequest {
-            title: "aa".to_string(),
-            images_url: vec![],
-            file_url: "aa".to_string(),
+            title: new_post_title.clone(),
+            imagesUrl: new_post_images_url.clone(),
+            fileUrl: new_post_file_url.clone(),
         };
 
         let result = create_new_post(State(state), Json(new_post_request)).await;
+        let inserted_id_json = result.ok().unwrap();
+        let inserted_id = inserted_id_json.0.as_object_id().unwrap();
+
+        let typed_collection = test_db.collection::<Post>("posts");
+
+        let new_post = typed_collection
+            .find_one(
+                doc! {
+                    "_id": inserted_id
+                },
+                None,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(new_post.title, new_post_title);
+        assert_eq!(new_post.images_url, new_post_images_url);
+        assert_eq!(new_post.file_url, new_post_file_url);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_edit_post() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        populate_test_data(&port);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+
+        let state = AppState {
+            mongo: test_db.clone(),
+        };
+
+        let typed_collection = test_db.collection::<Post>("posts");
+
+        let new_post = Post {
+            title: "test post".to_string(),
+            images_url: vec![],
+            file_url: "test file url".to_string(),
+            created_at: DateTime::now(),
+            updated_at: DateTime::now(),
+        };
+
+        let insert_result = typed_collection.insert_one(new_post, None).await.unwrap();
+        let updated_title = "updated test post".to_string();
+        let updated_image_url = vec!["one two three".to_string()];
+        let updated_file_url = "updated file url".to_string();
+
+        let edit_post_request = EditPostRequest {
+            title: updated_title.clone(),
+            imagesUrl: updated_image_url.clone(),
+            fileUrl: updated_file_url.clone(),
+        };
+
+        let temp = insert_result.inserted_id.as_object_id().unwrap();
+        let temppp = temp.clone();
+        let kk = temp.to_hex();
+        let result = edit_post(State(state), Path(kk), Json(edit_post_request)).await;
 
         assert!(result.is_ok());
+
+        let updated_post = typed_collection
+            .find_one(
+                doc! {
+                    "_id": temppp
+                },
+                None,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(updated_post.title, updated_title);
+        assert_eq!(updated_post.images_url, updated_image_url);
+        assert_eq!(updated_post.file_url, updated_file_url);
     }
 }

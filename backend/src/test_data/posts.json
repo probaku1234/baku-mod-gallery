@@ -6,12 +6,8 @@
     "title": "Test Post 1",
     "images_url": [],
     "file_url": "Toronto",
-    "created_at": {
-      "$date": "2024-01-21T06:00:52.621Z"
-    },
-    "updated_at": {
-      "$date": "2024-01-21T06:00:52.621Z"
-    }
+    "created_at": "2024-01-23T13:48:06.761Z",
+    "updated_at": "2024-01-23T13:48:06.761Z"
   },
   {
     "_id": {
@@ -20,11 +16,7 @@
     "title": "Test Post 2",
     "images_url": [],
     "file_url": "London",
-    "created_at": {
-      "$date": "2024-01-21T06:00:52.621Z"
-    },
-    "updated_at": {
-      "$date": "2024-01-21T06:00:52.621Z"
-    }
+    "created_at": "2024-01-23T13:48:06.761Z",
+    "updated_at": "2024-01-23T13:48:06.761Z"
   }
 ]

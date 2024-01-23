@@ -10,6 +10,7 @@ use axum::{
 };
 use futures::stream::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
+use mongodb::bson::serde_helpers::{bson_datetime_as_rfc3339_string, serialize_bson_datetime_as_rfc3339_string};
 use mongodb::bson::{doc, Bson, DateTime};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
@@ -19,7 +20,9 @@ pub struct Post {
     title: String,
     images_url: Vec<String>,
     file_url: String,
+    #[serde(with = "bson_datetime_as_rfc3339_string")]
     created_at: DateTime,
+    #[serde(with = "bson_datetime_as_rfc3339_string")]
     updated_at: DateTime,
 }
 
@@ -155,7 +158,8 @@ pub async fn edit_post(
             "title": req.title,
             "images_url": req.imagesUrl,
             "file_url": req.fileUrl,
-        }
+            "updated_at": DateTime::now().try_to_rfc3339_string().unwrap()
+        },
     };
 
     match typed_collection

@@ -1,0 +1,30 @@
+[
+  {
+    "_id": {
+      "$oid": "659e79f831f22dc0395699b2"
+    },
+    "title": "Test Post 1",
+    "images_url": [],
+    "file_url": "Toronto",
+    "created_at": {
+      "$date": "2024-01-21T06:00:52.621Z"
+    },
+    "updated_at": {
+      "$date": "2024-01-21T06:00:52.621Z"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "659e7a1e31f22dc0395699b3"
+    },
+    "title": "Test Post 2",
+    "images_url": [],
+    "file_url": "London",
+    "created_at": {
+      "$date": "2024-01-21T06:00:52.621Z"
+    },
+    "updated_at": {
+      "$date": "2024-01-21T06:00:52.621Z"
+    }
+  }
+]

@@ -10,13 +10,15 @@ use axum::{
 };
 use futures::stream::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
-use mongodb::bson::serde_helpers::{bson_datetime_as_rfc3339_string, serialize_bson_datetime_as_rfc3339_string};
+use mongodb::bson::serde_helpers::{bson_datetime_as_rfc3339_string, hex_string_as_object_id, serialize_bson_datetime_as_rfc3339_string, serialize_hex_string_as_object_id};
 use mongodb::bson::{doc, Bson, DateTime};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Post {
+    #[serde(with = "hex_string_as_object_id")]
+    _id: String,
     title: String,
     images_url: Vec<String>,
     file_url: String,
@@ -114,6 +116,7 @@ pub async fn create_new_post(
     let typed_collection = &state.mongo.collection::<Post>("posts");
 
     let new_post = Post {
+        _id: ObjectId::new().to_hex(),
         title: req.title,
         images_url: req.imagesUrl,
         file_url: req.fileUrl,
@@ -312,6 +315,7 @@ mod tests {
         let new_post_file_url = "aa".to_string();
 
         let new_post = Post {
+            _id: ObjectId::new().to_hex(),
             title: new_post_title.clone(),
             images_url: new_post_images_url.clone(),
             file_url: new_post_file_url.clone(),
@@ -387,6 +391,7 @@ mod tests {
         };
 
         let new_post = Post {
+            _id: ObjectId::new().to_hex(),
             title: "test post".to_string(),
             images_url: vec![],
             file_url: "test file url".to_string(),
@@ -440,6 +445,7 @@ mod tests {
         };
 
         let new_post = Post {
+            _id: ObjectId::new().to_hex(),
             title: "test post".to_string(),
             images_url: vec![],
             file_url: "test file url".to_string(),

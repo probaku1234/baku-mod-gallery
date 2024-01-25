@@ -59,7 +59,8 @@ fn grab_secrets(secrets: shuttle_secrets::SecretStore) -> (String, String, Strin
 mod tests {
     use super::*;
     use crate::test_util::test_util::{
-        count_all_posts, create_test_state, find_post_by_id, generate_port_number, generate_test_jwt_token, get_db_connection_uri, get_mongo_image, populate_test_data
+        count_all_posts, create_test_state, find_post_by_id, generate_port_number,
+        generate_test_jwt_token, get_db_connection_uri, get_mongo_image, populate_test_data,
     };
     use ::axum_test::TestServer;
     use axum::http::{HeaderName, HeaderValue};
@@ -196,9 +197,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_edit_post_unauthorized() {
-
-    }
+    async fn test_edit_post_unauthorized() {}
 
     #[tokio::test]
     async fn test_edit_post_invalid_id() {
@@ -254,7 +253,8 @@ mod tests {
         let server = TestServer::new(app).unwrap();
 
         let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
-        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
+        let header_value =
+            HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let response = server
             .put(format!("/api/posts/{}", invalid_id).as_str())
             .content_type(&"application/json")
@@ -289,7 +289,8 @@ mod tests {
         let server = TestServer::new(app).unwrap();
 
         let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
-        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
+        let header_value =
+            HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let insert_result = server
             .post("/api/posts/create")
             .content_type(&"application/json")
@@ -362,7 +363,8 @@ mod tests {
         let server = TestServer::new(app).unwrap();
 
         let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
-        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
+        let header_value =
+            HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let response = server
             .delete(format!("/api/posts/{}", invalid_id).as_str())
             .add_header(header_name, header_value)
@@ -389,7 +391,8 @@ mod tests {
         let server = TestServer::new(app).unwrap();
 
         let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
-        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
+        let header_value =
+            HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let response = server
             .delete(format!("/api/posts/{}", invalid_id).as_str())
             .add_header(header_name, header_value)
@@ -418,7 +421,8 @@ mod tests {
         let server = TestServer::new(app).unwrap();
 
         let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
-        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
+        let header_value =
+            HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let insert_result = server
             .post("/api/posts/create")
             .content_type(&"application/json")
@@ -493,7 +497,8 @@ mod tests {
         let server = TestServer::new(app).unwrap();
 
         let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
-        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
+        let header_value =
+            HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let insert_result = server
             .post("/api/posts/create")
             .content_type(&"application/json")
@@ -553,8 +558,12 @@ mod tests {
         let server = TestServer::new(app).unwrap();
 
         let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
-        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
-        let response = server.delete("/api/posts").add_header(header_name, header_value).await;
+        let header_value =
+            HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
+        let response = server
+            .delete("/api/posts")
+            .add_header(header_name, header_value)
+            .await;
 
         response.assert_status_ok();
 
@@ -562,6 +571,4 @@ mod tests {
 
         assert_eq!(count, 0);
     }
-
-
 }

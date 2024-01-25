@@ -10,7 +10,10 @@ use axum::{
 };
 use futures::stream::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
-use mongodb::bson::serde_helpers::{bson_datetime_as_rfc3339_string, hex_string_as_object_id, serialize_bson_datetime_as_rfc3339_string, serialize_hex_string_as_object_id};
+use mongodb::bson::serde_helpers::{
+    bson_datetime_as_rfc3339_string, hex_string_as_object_id,
+    serialize_bson_datetime_as_rfc3339_string, serialize_hex_string_as_object_id,
+};
 use mongodb::bson::{doc, Bson, DateTime};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
@@ -232,11 +235,11 @@ pub async fn delete_all_posts(
 ) -> Result<StatusCode, impl IntoResponse> {
     let typed_collection = &state.mongo.collection::<Post>("posts");
 
-    match typed_collection.delete_many(doc! {},None).await {
+    match typed_collection.delete_many(doc! {}, None).await {
         Ok(result) => {
             info!("{} posts deleted", result.deleted_count);
             Ok(StatusCode::OK)
-        },
+        }
         Err(err) => {
             let error_message = err.to_string();
             error!("{}", error_message.clone());
@@ -253,8 +256,8 @@ use test_env_helpers::*;
 mod tests {
     use super::*;
     use crate::test_util::test_util::{
-        find_post_by_id, generate_port_number, get_db_connection_uri, get_mongo_image,
-        insert_test_post, populate_test_data, create_test_state, count_all_posts
+        count_all_posts, create_test_state, find_post_by_id, generate_port_number,
+        get_db_connection_uri, get_mongo_image, insert_test_post, populate_test_data,
     };
     use mongodb::Client;
     use testcontainers::clients;
@@ -342,10 +345,7 @@ mod tests {
         let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
         let object_id_string = inserted_post_object_id.to_hex();
 
-        let result = get_post_by_id(
-            State(state),
-            Path(object_id_string)
-        ).await;
+        let result = get_post_by_id(State(state), Path(object_id_string)).await;
 
         assert!(result.is_ok());
 

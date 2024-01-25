@@ -8,7 +8,7 @@ pub mod test_util {
     use std::net::UdpSocket;
     use testcontainers::{GenericImage, RunnableImage};
 
-    use crate::posts::Post;
+    use crate::{posts::Post, AppState};
 
     pub fn generate_port_number() -> u16 {
         let address = "0.0.0.0:0";
@@ -57,5 +57,12 @@ pub mod test_util {
             .await;
 
         find_result.unwrap()
+    }
+
+    pub fn create_test_state(mongo: mongodb::Database) -> AppState {
+        AppState {
+            mongo,
+            jwt_key: "jpPZGyeXTRpQ2rfyyCY/a+eStyVkYrlIhCYe69Ul+lw=".to_string()
+        }
     }
 }

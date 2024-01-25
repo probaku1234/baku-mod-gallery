@@ -1,39 +1,45 @@
 use axum::Router;
 use mongodb;
 
+mod jwt_auth;
 mod posts;
 mod router;
 mod test_util;
-mod jwt_auth;
 
 use router::create_api_router;
 
 #[derive(Clone)]
 pub struct AppState {
     pub mongo: mongodb::Database,
+    pub jwt_key: String,
 }
 
 // TODO: use secret
 #[shuttle_runtime::main]
 async fn main(
     #[shuttle_shared_db::MongoDb] mongo: mongodb::Database,
-    #[shuttle_secrets::Secrets] _secret_store: shuttle_secrets::SecretStore,
+    #[shuttle_secrets::Secrets] secret_store: shuttle_secrets::SecretStore,
 ) -> shuttle_axum::ShuttleAxum {
-    // let state = AppState {
-    //     mongo
-    // };
 
-    // let api_router = create_api_router(state);
-    // let router = Router::new().nest("/api", api_router);
+    let jwt_key = grab_secrets(secret_store);
+    let state = AppState { mongo, jwt_key };
 
-    Ok(app(mongo.clone()).into())
+    Ok(app(state).into())
 }
 
-fn app(mongo: mongodb::Database) -> Router {
-    let state = AppState { mongo };
+fn app(state: AppState) -> Router {
+    // let state = AppState { mongo, jwt_key };
 
     let api_router = create_api_router(state);
     Router::new().nest("/api", api_router)
+}
+
+fn grab_secrets(secrets: shuttle_secrets::SecretStore) -> String {
+    let jwt_key = secrets
+        .get("JWT_SECRET")
+        .unwrap_or_else(|| "None".to_string());
+
+    jwt_key
 }
 
 // TODO: test endpoint
@@ -41,8 +47,8 @@ fn app(mongo: mongodb::Database) -> Router {
 mod tests {
     use super::*;
     use crate::test_util::test_util::{
-            find_post_by_id, generate_port_number, get_db_connection_uri, get_mongo_image, populate_test_data
-        };
+        create_test_state, find_post_by_id, generate_port_number, get_db_connection_uri, get_mongo_image, populate_test_data
+    };
     use ::axum_test::TestServer;
     use mongodb::{bson::Bson, Client};
     use serde_json::json;
@@ -58,8 +64,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db);
+        let state = create_test_state(test_db);
+        let app = app(state);
 
         let server = TestServer::new(app).unwrap();
 
@@ -79,8 +85,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db);
+        let state = create_test_state(test_db);
+        let app = app(state);
 
         let server = TestServer::new(app).unwrap();
 
@@ -104,8 +110,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db.clone());
+        let state = create_test_state(test_db);
+        let app = app(state);
 
         let invalid_id = "invalid id";
 
@@ -128,8 +134,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db.clone());
+        let state = create_test_state(test_db);
+        let app = app(state);
 
         let invalid_id = "659e79f831f22dc0395699b2";
 
@@ -153,8 +159,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db.clone());
+        let state = create_test_state(test_db);
+        let app = app(state);
 
         // let new_post_title = "aa".to_string();
         // let new_post_images_url: Vec<String> = vec![];
@@ -186,8 +192,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db.clone());
+        let state = create_test_state(test_db);
+        let app = app(state);
 
         let invalid_id = "invalid id";
         let updated_title = "updated test post".to_string();
@@ -219,8 +225,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db.clone());
+        let state = create_test_state(test_db);
+        let app = app(state);
 
         let invalid_id = "659e79f831f22dc0395699b2";
         let updated_title = "updated test post".to_string();
@@ -252,8 +258,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db.clone());
+        let state = create_test_state(test_db);
+        let app = app(state);
 
         let new_post_title = "aa".to_string();
         let new_post_images_url: Vec<String> = vec![];
@@ -301,8 +307,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db.clone());
+        let state = create_test_state(test_db);
+        let app = app(state);
 
         let invalid_id = "invalid id";
 
@@ -325,8 +331,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db.clone());
+        let state = create_test_state(test_db);
+        let app = app(state);
 
         let invalid_id = "659e79f831f22dc0395699b2";
 
@@ -349,8 +355,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db.clone());
+        let state = create_test_state(test_db.clone());
+        let app = app(state);
 
         let new_post_title = "aa".to_string();
         let new_post_images_url: Vec<String> = vec![];
@@ -392,8 +398,8 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-
-        let app = app(test_db.clone());
+        let state = create_test_state(test_db.clone());
+        let app = app(state);
 
         let new_post_title = "aa".to_string();
         let new_post_images_url: Vec<String> = vec![];

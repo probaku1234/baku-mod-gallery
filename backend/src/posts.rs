@@ -227,6 +227,11 @@ pub async fn delete_post(
     }
 }
 
+// TODO: implement this
+fn delete_all_posts() {
+    unimplemented!("aaaa")
+}
+
 #[cfg(test)]
 use test_env_helpers::*;
 
@@ -236,7 +241,7 @@ mod tests {
     use super::*;
     use crate::test_util::test_util::{
         find_post_by_id, generate_port_number, get_db_connection_uri, get_mongo_image,
-        insert_test_post, populate_test_data,
+        insert_test_post, populate_test_data, create_test_state
     };
     use crate::AppState;
     use mongodb::Client;
@@ -262,7 +267,7 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState { mongo: test_db };
+        let state = create_test_state(test_db);
 
         let result = get_all_posts(State(state)).await;
 
@@ -286,7 +291,7 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState { mongo: test_db };
+        let state = create_test_state(test_db);
 
         let result = get_post_by_id(State(state), Path("aaaa".to_string())).await;
 
@@ -308,7 +313,7 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState { mongo: test_db.clone() };
+        let state = create_test_state(test_db.clone());
 
         let new_post_title = "aa".to_string();
         let new_post_images_url: Vec<String> = vec![];
@@ -351,9 +356,8 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState {
-            mongo: test_db.clone(),
-        };
+        let state = create_test_state(test_db.clone());
+
         let new_post_title = "aa".to_string();
         let new_post_images_url: Vec<String> = vec![];
         let new_post_file_url = "aa".to_string();
@@ -386,9 +390,7 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState {
-            mongo: test_db.clone(),
-        };
+        let state = create_test_state(test_db.clone());
 
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
@@ -440,9 +442,7 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState {
-            mongo: test_db.clone(),
-        };
+        let state = create_test_state(test_db.clone());
 
         let new_post = Post {
             _id: ObjectId::new().to_hex(),

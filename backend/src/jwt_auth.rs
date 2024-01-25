@@ -8,6 +8,9 @@ use axum::{
     
 };
 use jsonwebtoken::{decode, DecodingKey, Validation};
+use tracing::error;
+
+use crate::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TokenClaims {
@@ -18,6 +21,7 @@ pub struct TokenClaims {
 }
 
 pub async fn auth_jwt(
+    State(state): State<AppState>,
     req: Request,
     next: Next,
 ) -> Result<impl IntoResponse, StatusCode> {
@@ -39,9 +43,12 @@ pub async fn auth_jwt(
     // FIXME: use secret
     let claims = decode::<TokenClaims>(
         &token,
-        &DecodingKey::from_secret(b""),
+        &DecodingKey::from_secret(state.jwt_key.as_bytes()),
         &Validation::default()
-    ).map_err(|_| {
+    ).map_err(|err| {
+        let error_message = err.to_string();
+        error!("{}", error_message);
+        
         return StatusCode::UNAUTHORIZED;
     })?.claims;
 

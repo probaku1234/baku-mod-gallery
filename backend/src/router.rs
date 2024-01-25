@@ -6,15 +6,33 @@ use axum::{
     routing::{get, post, put},
     Router,
 };
+use http::header::{ACCEPT, AUTHORIZATION, ORIGIN};
+use http::HeaderValue;
+use http::Method;
+use tower_http::cors::CorsLayer;
+use crate::jwt_auth::auth_jwt;
 
 pub fn create_api_router(state: AppState) -> Router {
+    let origins = [
+        state.server_domain.parse().unwrap(),
+        state.client_domain.parse().unwrap(),
+    ];
+
+    let cors = CorsLayer::new()
+        .allow_credentials(true)
+        .allow_methods(vec![Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_headers(vec![ORIGIN, AUTHORIZATION, ACCEPT])
+        .allow_origin(origins);
+    
     let posts_router = Router::new()
+        .route("/:id", put(edit_post).delete(delete_post))
+        .route("/create", post(create_new_post))
+        .layer(middleware::from_fn_with_state(state.clone(), auth_jwt))
         .route("/", get(get_all_posts))
         .route(
             "/:id",
-            post(get_post_by_id).put(edit_post).delete(delete_post),
-        )
-        .route("/create", post(create_new_post));
+            post(get_post_by_id)
+        );
 
     Router::new()
         .nest("/posts", posts_router)
@@ -23,6 +41,7 @@ pub fn create_api_router(state: AppState) -> Router {
         // ))
         .route("/health_check", get(hello_world))
         .with_state(state)
+        .layer(cors)
 }
 
 pub async fn hello_world() -> &'static str {

@@ -12,17 +12,23 @@ use router::create_api_router;
 pub struct AppState {
     pub mongo: mongodb::Database,
     pub jwt_key: String,
+    pub server_domain: String,
+    pub client_domain: String,
 }
 
-// TODO: use secret
+// TODO: cors, add domain to state
 #[shuttle_runtime::main]
 async fn main(
     #[shuttle_shared_db::MongoDb] mongo: mongodb::Database,
     #[shuttle_secrets::Secrets] secret_store: shuttle_secrets::SecretStore,
 ) -> shuttle_axum::ShuttleAxum {
-
-    let jwt_key = grab_secrets(secret_store);
-    let state = AppState { mongo, jwt_key };
+    let (jwt_key, server_domain, client_domain) = grab_secrets(secret_store);
+    let state = AppState {
+        mongo,
+        jwt_key,
+        server_domain,
+        client_domain,
+    };
 
     Ok(app(state).into())
 }
@@ -34,12 +40,20 @@ fn app(state: AppState) -> Router {
     Router::new().nest("/api", api_router)
 }
 
-fn grab_secrets(secrets: shuttle_secrets::SecretStore) -> String {
+fn grab_secrets(secrets: shuttle_secrets::SecretStore) -> (String, String, String) {
     let jwt_key = secrets
         .get("JWT_SECRET")
         .unwrap_or_else(|| "None".to_string());
 
-    jwt_key
+    let server_domain = secrets
+        .get("SERVER_DOMAIN")
+        .unwrap_or_else(|| "None".to_string());
+
+    let client_domain = secrets
+        .get("CLIENT_DOMAIN")
+        .unwrap_or_else(|| "None".to_string());
+
+    (jwt_key, server_domain, client_domain)
 }
 
 // TODO: test endpoint
@@ -47,9 +61,10 @@ fn grab_secrets(secrets: shuttle_secrets::SecretStore) -> String {
 mod tests {
     use super::*;
     use crate::test_util::test_util::{
-        create_test_state, find_post_by_id, generate_port_number, get_db_connection_uri, get_mongo_image, populate_test_data
+        create_test_state, find_post_by_id, generate_port_number, generate_test_jwt_token, get_db_connection_uri, get_mongo_image, populate_test_data
     };
     use ::axum_test::TestServer;
+    use axum::http::{HeaderName, HeaderValue};
     use mongodb::{bson::Bson, Client};
     use serde_json::json;
     use testcontainers::clients;
@@ -183,6 +198,11 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_edit_post_unauthorized() {
+
+    }
+
+    #[tokio::test]
     async fn test_edit_post_invalid_id() {
         let docker = clients::Cli::default();
         let port = generate_port_number();
@@ -212,7 +232,7 @@ mod tests {
             }))
             .await;
 
-        response.assert_status_bad_request();
+        response.assert_status_unauthorized();
     }
 
     #[tokio::test]
@@ -235,6 +255,8 @@ mod tests {
 
         let server = TestServer::new(app).unwrap();
 
+        let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
+        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let response = server
             .put(format!("/api/posts/{}", invalid_id).as_str())
             .content_type(&"application/json")
@@ -243,6 +265,7 @@ mod tests {
                 "imagesUrl": updated_image_url.clone(),
                 "fileUrl": updated_file_url.clone(),
             }))
+            .add_header(header_name, header_value)
             .await;
 
         response.assert_status_not_found();
@@ -267,6 +290,8 @@ mod tests {
 
         let server = TestServer::new(app).unwrap();
 
+        let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
+        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let insert_result = server
             .post("/api/posts/create")
             .content_type(&"application/json")
@@ -275,6 +300,7 @@ mod tests {
                 "imagesUrl": new_post_images_url.clone(),
                 "fileUrl": new_post_file_url.clone(),
             }))
+            .add_header(header_name.clone(), header_value.clone())
             .await;
 
         let inserted_post_id = insert_result.json::<Bson>();
@@ -292,9 +318,32 @@ mod tests {
                 "imagesUrl": updated_image_url.clone(),
                 "fileUrl": updated_file_url.clone(),
             }))
+            .add_header(header_name.clone(), header_value.clone())
             .await;
 
         response.assert_status_ok();
+    }
+
+    #[tokio::test]
+    async fn test_delete_post_unauthorized() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+        let state = create_test_state(test_db);
+        let app = app(state);
+
+        let server = TestServer::new(app).unwrap();
+
+        let response = server
+            .delete(format!("/api/posts/{}", "invalid_id").as_str())
+            .await;
+
+        response.assert_status_unauthorized();
     }
 
     #[tokio::test]
@@ -314,8 +363,11 @@ mod tests {
 
         let server = TestServer::new(app).unwrap();
 
+        let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
+        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let response = server
             .delete(format!("/api/posts/{}", invalid_id).as_str())
+            .add_header(header_name, header_value)
             .await;
 
         response.assert_status_bad_request();
@@ -338,8 +390,11 @@ mod tests {
 
         let server = TestServer::new(app).unwrap();
 
+        let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
+        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let response = server
             .delete(format!("/api/posts/{}", invalid_id).as_str())
+            .add_header(header_name, header_value)
             .await;
 
         response.assert_status_not_found();
@@ -364,6 +419,8 @@ mod tests {
 
         let server = TestServer::new(app).unwrap();
 
+        let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
+        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let insert_result = server
             .post("/api/posts/create")
             .content_type(&"application/json")
@@ -372,6 +429,7 @@ mod tests {
                 "imagesUrl": new_post_images_url.clone(),
                 "fileUrl": new_post_file_url.clone(),
             }))
+            .add_header(header_name.clone(), header_value.clone())
             .await;
 
         let inserted_post_id = insert_result.json::<Bson>();
@@ -379,6 +437,7 @@ mod tests {
 
         let delete_result = server
             .delete(format!("/api/posts/{}", object_id.clone().to_hex()).as_str())
+            .add_header(header_name, header_value)
             .await;
 
         delete_result.assert_status_ok();
@@ -386,6 +445,34 @@ mod tests {
         let find_result = find_post_by_id(test_db, object_id).await;
 
         assert!(find_result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_create_new_post_unauthorized() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+        let state = create_test_state(test_db.clone());
+        let app = app(state);
+
+        let server = TestServer::new(app).unwrap();
+
+        let insert_result = server
+            .post("/api/posts/create")
+            .content_type(&"application/json")
+            .json(&json!({
+                "title": "new_post_title",
+                "imagesUrl": [],
+                "fileUrl": "new_post_file_url",
+            }))
+            .await;
+
+        insert_result.assert_status_unauthorized();
     }
 
     #[tokio::test]
@@ -407,6 +494,8 @@ mod tests {
 
         let server = TestServer::new(app).unwrap();
 
+        let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
+        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
         let insert_result = server
             .post("/api/posts/create")
             .content_type(&"application/json")
@@ -415,6 +504,7 @@ mod tests {
                 "imagesUrl": new_post_images_url.clone(),
                 "fileUrl": new_post_file_url.clone(),
             }))
+            .add_header(header_name, header_value)
             .await;
 
         insert_result.assert_status_ok();

@@ -4,6 +4,7 @@ use mongodb;
 mod posts;
 mod router;
 mod test_util;
+mod jwt_auth;
 
 use router::create_api_router;
 
@@ -12,6 +13,7 @@ pub struct AppState {
     pub mongo: mongodb::Database,
 }
 
+// TODO: use secret
 #[shuttle_runtime::main]
 async fn main(
     #[shuttle_shared_db::MongoDb] mongo: mongodb::Database,

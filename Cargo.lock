@@ -1355,6 +1355,7 @@ dependencies = [
  "axum 0.7.4",
  "axum-test",
  "futures",
+ "jsonwebtoken",
  "mongodb",
  "run_script",
  "serde",

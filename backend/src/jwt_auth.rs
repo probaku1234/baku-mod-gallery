@@ -40,7 +40,6 @@ pub async fn auth_jwt(
         return StatusCode::UNAUTHORIZED;
     })?;
 
-    // FIXME: use secret
     let claims = decode::<TokenClaims>(
         &token,
         &DecodingKey::from_secret(state.jwt_key.as_bytes()),
@@ -48,7 +47,7 @@ pub async fn auth_jwt(
     ).map_err(|err| {
         let error_message = err.to_string();
         error!("{}", error_message);
-        
+
         return StatusCode::UNAUTHORIZED;
     })?.claims;
 

@@ -227,9 +227,22 @@ pub async fn delete_post(
     }
 }
 
-// TODO: implement this
-fn delete_all_posts() {
-    unimplemented!("aaaa")
+pub async fn delete_all_posts(
+    State(state): State<AppState>,
+) -> Result<StatusCode, impl IntoResponse> {
+    let typed_collection = &state.mongo.collection::<Post>("posts");
+
+    match typed_collection.delete_many(doc! {},None).await {
+        Ok(result) => {
+            info!("{} posts deleted", result.deleted_count);
+            Ok(StatusCode::OK)
+        },
+        Err(err) => {
+            let error_message = err.to_string();
+            error!("{}", error_message.clone());
+            Err((StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -241,13 +254,11 @@ mod tests {
     use super::*;
     use crate::test_util::test_util::{
         find_post_by_id, generate_port_number, get_db_connection_uri, get_mongo_image,
-        insert_test_post, populate_test_data, create_test_state
+        insert_test_post, populate_test_data, create_test_state, count_all_posts
     };
-    use crate::AppState;
     use mongodb::Client;
     use testcontainers::clients;
 
-    // TODO: util functios for create, get
     async fn before_all() {
         // let docker = clients::Cli::default();
         // let port = generate_port_number();
@@ -462,5 +473,28 @@ mod tests {
         let find_result = find_post_by_id(test_db, inserted_post_object_id).await;
 
         assert!(find_result.is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_delete_all_posts() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        populate_test_data(&port);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+
+        let state = create_test_state(test_db.clone());
+
+        let result = delete_all_posts(State(state)).await;
+
+        assert!(result.is_ok());
+
+        let count_posts = count_all_posts(test_db).await;
+
+        assert_eq!(count_posts, 0);
     }
 }

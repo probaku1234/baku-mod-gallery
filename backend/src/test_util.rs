@@ -6,7 +6,6 @@ pub mod test_util {
         Database,
     };
     use run_script::run_script;
-    use serde::{Deserialize, Serialize};
     use std::net::UdpSocket;
     use testcontainers::{GenericImage, RunnableImage};
 
@@ -86,5 +85,13 @@ pub mod test_util {
         .unwrap();
 
         token
+    }
+
+    pub async fn count_all_posts(db: Database) -> u64 {
+        let typed_collection = db.collection::<Post>("posts");
+
+        let count = typed_collection.count_documents(None, None).await.unwrap();
+
+        count
     }
 }

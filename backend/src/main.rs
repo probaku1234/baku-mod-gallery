@@ -16,7 +16,6 @@ pub struct AppState {
     pub client_domain: String,
 }
 
-// TODO: cors, add domain to state
 #[shuttle_runtime::main]
 async fn main(
     #[shuttle_shared_db::MongoDb] mongo: mongodb::Database,
@@ -56,12 +55,11 @@ fn grab_secrets(secrets: shuttle_secrets::SecretStore) -> (String, String, Strin
     (jwt_key, server_domain, client_domain)
 }
 
-// TODO: test endpoint
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_util::test_util::{
-        create_test_state, find_post_by_id, generate_port_number, generate_test_jwt_token, get_db_connection_uri, get_mongo_image, populate_test_data
+        count_all_posts, create_test_state, find_post_by_id, generate_port_number, generate_test_jwt_token, get_db_connection_uri, get_mongo_image, populate_test_data
     };
     use ::axum_test::TestServer;
     use axum::http::{HeaderName, HeaderValue};
@@ -516,4 +514,54 @@ mod tests {
 
         assert!(find_result.is_some());
     }
+
+    #[tokio::test]
+    async fn test_delete_all_posts_unauthorized() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        populate_test_data(&port);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+        let state = create_test_state(test_db);
+        let app = app(state);
+
+        let server = TestServer::new(app).unwrap();
+
+        let response = server.delete("/api/posts").await;
+
+        response.assert_status_unauthorized();
+    }
+
+    #[tokio::test]
+    async fn test_delete_all_posts() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        populate_test_data(&port);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+        let state = create_test_state(test_db.clone());
+        let app = app(state);
+
+        let server = TestServer::new(app).unwrap();
+
+        let header_name = HeaderName::from_lowercase(b"authorization").unwrap();
+        let header_value = HeaderValue::from_str(&format!("Bearer {}", generate_test_jwt_token())).unwrap();
+        let response = server.delete("/api/posts").add_header(header_name, header_value).await;
+
+        response.assert_status_ok();
+
+        let count = count_all_posts(test_db).await;
+
+        assert_eq!(count, 0);
+    }
+
+
 }

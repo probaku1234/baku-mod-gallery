@@ -247,8 +247,10 @@ mod tests {
 
         let invalid_id = "659e79f831f22dc0395699b2";
         let updated_title = "updated test post".to_string();
+        let updated_content = "content".to_string();
         let updated_image_url = vec!["one two three".to_string()];
         let updated_file_url = "updated file url".to_string();
+        let updated_mod_type = "mod".to_string();
 
         let server = TestServer::new(app).unwrap();
 
@@ -260,8 +262,10 @@ mod tests {
             .content_type(&"application/json")
             .json(&json!({
                 "title": updated_title.clone(),
+                "content": updated_content.clone(),
                 "imagesUrl": updated_image_url.clone(),
                 "fileUrl": updated_file_url.clone(),
+                "modType": updated_mod_type.clone(),
             }))
             .add_header(header_name, header_value)
             .await;
@@ -283,8 +287,10 @@ mod tests {
         let app = app(state);
 
         let new_post_title = "aa".to_string();
+        let new_post_content = "content".to_string();
         let new_post_images_url: Vec<String> = vec![];
         let new_post_file_url = "aa".to_string();
+        let new_post_mod_type = "preset".to_string();
 
         let server = TestServer::new(app).unwrap();
 
@@ -296,8 +302,10 @@ mod tests {
             .content_type(&"application/json")
             .json(&json!({
                 "title": new_post_title.clone(),
+                "content": new_post_content.clone(),
                 "imagesUrl": new_post_images_url.clone(),
                 "fileUrl": new_post_file_url.clone(),
+                "modType": new_post_mod_type.clone(),
             }))
             .add_header(header_name.clone(), header_value.clone())
             .await;
@@ -306,16 +314,20 @@ mod tests {
         let object_id = inserted_post_id.as_object_id().unwrap();
 
         let updated_title = "updated test post".to_string();
+        let updated_content = "content".to_string();
         let updated_image_url = vec!["one two three".to_string()];
         let updated_file_url = "updated file url".to_string();
+        let updated_mod_type = "mod".to_string();
 
         let response = server
             .put(format!("/api/posts/{}", object_id.to_hex()).as_str())
             .content_type(&"application/json")
             .json(&json!({
                 "title": updated_title.clone(),
+                "content": updated_content.clone(),
                 "imagesUrl": updated_image_url.clone(),
                 "fileUrl": updated_file_url.clone(),
+                "modType": updated_mod_type.clone(),
             }))
             .add_header(header_name.clone(), header_value.clone())
             .await;
@@ -415,8 +427,11 @@ mod tests {
         let app = app(state);
 
         let new_post_title = "aa".to_string();
+        let new_post_content = "content".to_string();
         let new_post_images_url: Vec<String> = vec![];
         let new_post_file_url = "aa".to_string();
+        let new_post_mod_type = "preset".to_string();
+
 
         let server = TestServer::new(app).unwrap();
 
@@ -428,8 +443,10 @@ mod tests {
             .content_type(&"application/json")
             .json(&json!({
                 "title": new_post_title.clone(),
+                "content": new_post_content.clone(),
                 "imagesUrl": new_post_images_url.clone(),
                 "fileUrl": new_post_file_url.clone(),
+                "modType": new_post_mod_type.clone(),
             }))
             .add_header(header_name.clone(), header_value.clone())
             .await;
@@ -491,8 +508,10 @@ mod tests {
         let app = app(state);
 
         let new_post_title = "aa".to_string();
+        let new_post_content = "content".to_string();
         let new_post_images_url: Vec<String> = vec![];
         let new_post_file_url = "aa".to_string();
+        let new_post_mod_type = "preset".to_string();
 
         let server = TestServer::new(app).unwrap();
 
@@ -504,8 +523,10 @@ mod tests {
             .content_type(&"application/json")
             .json(&json!({
                 "title": new_post_title.clone(),
+                "content": new_post_content.clone(),
                 "imagesUrl": new_post_images_url.clone(),
                 "fileUrl": new_post_file_url.clone(),
+                "modType": new_post_mod_type.clone(),
             }))
             .add_header(header_name, header_value)
             .await;

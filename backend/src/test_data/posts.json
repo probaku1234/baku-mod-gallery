@@ -4,8 +4,10 @@
       "$oid": "659e79f831f22dc0395699b2"
     },
     "title": "Test Post 1",
+    "content": "hohoho",
     "images_url": [],
-    "file_url": "Toronto",
+    "file_url": "http://file.com",
+    "mod_type": "preset",
     "created_at": "2024-01-23T13:48:06.761Z",
     "updated_at": "2024-01-23T13:48:06.761Z"
   },
@@ -14,8 +16,10 @@
       "$oid": "659e7a1e31f22dc0395699b3"
     },
     "title": "Test Post 2",
+    "content": "aaaaaaaaaaaa",
     "images_url": [],
-    "file_url": "London",
+    "file_url": "http://file.com",
+    "mod_type": "preset",
     "created_at": "2024-01-23T13:48:06.761Z",
     "updated_at": "2024-01-23T13:48:06.761Z"
   }

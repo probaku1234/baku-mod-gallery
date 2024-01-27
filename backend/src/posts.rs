@@ -12,7 +12,6 @@ use futures::stream::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::serde_helpers::{
     bson_datetime_as_rfc3339_string, hex_string_as_object_id,
-    serialize_bson_datetime_as_rfc3339_string, serialize_hex_string_as_object_id,
 };
 use mongodb::bson::{doc, Bson, DateTime};
 use serde::{Deserialize, Serialize};
@@ -23,8 +22,10 @@ pub struct Post {
     #[serde(with = "hex_string_as_object_id")]
     _id: String,
     title: String,
+    content: String,
     images_url: Vec<String>,
     file_url: String,
+    mod_type: String,
     #[serde(with = "bson_datetime_as_rfc3339_string")]
     created_at: DateTime,
     #[serde(with = "bson_datetime_as_rfc3339_string")]
@@ -35,16 +36,20 @@ pub struct Post {
 #[allow(non_snake_case)]
 pub struct NewPostRequest {
     title: String,
+    content: String,
     imagesUrl: Vec<String>,
     fileUrl: String,
+    modType: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[allow(non_snake_case)]
 pub struct EditPostRequest {
     title: String,
+    content: String,
     imagesUrl: Vec<String>,
     fileUrl: String,
+    modType: String,
 }
 
 pub async fn get_all_posts(
@@ -121,8 +126,10 @@ pub async fn create_new_post(
     let new_post = Post {
         _id: ObjectId::new().to_hex(),
         title: req.title,
+        content: req.content,
         images_url: req.imagesUrl,
         file_url: req.fileUrl,
+        mod_type: req.modType,
         created_at: DateTime::now(),
         updated_at: DateTime::now(),
     };
@@ -260,6 +267,7 @@ mod tests {
         get_db_connection_uri, get_mongo_image, insert_test_post, populate_test_data,
     };
     use mongodb::Client;
+    use serde_json::to_string;
     use testcontainers::clients;
 
     async fn before_all() {
@@ -330,14 +338,18 @@ mod tests {
         let state = create_test_state(test_db.clone());
 
         let new_post_title = "aa".to_string();
+        let new_post_content = "content".to_string();
         let new_post_images_url: Vec<String> = vec![];
         let new_post_file_url = "aa".to_string();
+        let new_post_mod_type = "preset".to_string();
 
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
             title: new_post_title.clone(),
+            content: new_post_content.clone(),
             images_url: new_post_images_url.clone(),
             file_url: new_post_file_url.clone(),
+            mod_type: new_post_mod_type.clone(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
         };
@@ -370,13 +382,17 @@ mod tests {
         let state = create_test_state(test_db.clone());
 
         let new_post_title = "aa".to_string();
+        let new_post_content = "content".to_string();
         let new_post_images_url: Vec<String> = vec![];
         let new_post_file_url = "aa".to_string();
+        let new_post_mod_type = "preset".to_string();
 
         let new_post_request = NewPostRequest {
             title: new_post_title.clone(),
+            content: new_post_content.clone(),
             imagesUrl: new_post_images_url.clone(),
             fileUrl: new_post_file_url.clone(),
+            modType: new_post_mod_type.clone(),
         };
 
         let result = create_new_post(State(state), Json(new_post_request)).await;
@@ -406,20 +422,26 @@ mod tests {
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
             title: "test post".to_string(),
+            content: "test content".to_string(),
             images_url: vec![],
             file_url: "test file url".to_string(),
+            mod_type: "aaa".to_string(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
         };
 
         let updated_title = "updated test post".to_string();
+        let updated_content = "updated content".to_string();
         let updated_image_url = vec!["one two three".to_string()];
         let updated_file_url = "updated file url".to_string();
+        let updated_mod_type = "aaaaa".to_string();
 
         let edit_post_request = EditPostRequest {
             title: updated_title.clone(),
+            content: updated_content.clone(),
             imagesUrl: updated_image_url.clone(),
             fileUrl: updated_file_url.clone(),
+            modType: updated_mod_type.clone(),
         };
 
         let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
@@ -458,8 +480,10 @@ mod tests {
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
             title: "test post".to_string(),
+            content: "test content".to_string(),
             images_url: vec![],
             file_url: "test file url".to_string(),
+            mod_type: "aaa".to_string(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
         };

@@ -180,7 +180,9 @@ pub async fn edit_post(
         .await
     {
         Ok(result) => match result {
-            Some(post) => Ok(Json(post)),
+            Some(post) => {
+                info!("Post {} edited", post._id);
+                Ok(Json(post))},
             None => {
                 error!("The post with id: {} not found!", id);
                 Err((

@@ -6,6 +6,7 @@ declare global {
       $oid: string;
     };
     title: string;
+    content: string;
     images_url: string[];
     file_url: string;
     mod_type: string;

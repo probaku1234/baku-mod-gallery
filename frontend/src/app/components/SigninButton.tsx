@@ -13,7 +13,7 @@ const SigninButton = () => {
       </div>
     );
   }
-  return <button onClick={() => signIn()}>Sign In</button>;
+  return <button onClick={() => signIn(undefined, {callbackUrl: "/admin"})}>Sign In</button>;
 };
 
 export default SigninButton;

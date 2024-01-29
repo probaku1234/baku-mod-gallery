@@ -8,6 +8,7 @@ declare global {
     title: string;
     images_url: string[];
     file_url: string;
+    mod_type: string;
     created_at: Date;
     updated_at: Date;
   }

@@ -27,7 +27,9 @@ const PostModal = (props: Props) => {
   const [imageUrls, setImageUrls] = useState(
     props.post ? props.post.images_url : []
   );
-  const [content, setContent] = useState<string>("");
+  const [content, setContent] = useState<string>(
+    props.post ? props.post.content : ""
+  );
   const { pending } = useFormStatus();
   const initialFormState = {
     result: "",
@@ -170,7 +172,10 @@ const PostModal = (props: Props) => {
               </Select>
             </div>
             <div className="h-2/4">
-              <QuillTextEditor onChange={onContentChange} />
+              <QuillTextEditor
+                onChange={onContentChange}
+                defaultValue={props.post ? props.post.content : ""}
+              />
             </div>
             <Button type="submit">Submit</Button>
           </form>

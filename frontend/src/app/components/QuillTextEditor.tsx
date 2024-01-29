@@ -47,9 +47,10 @@ const formats = [
 ];
 
 interface Props {
+  defaultValue: string
   onChange: (content: string) => void
 }
 
 export default function QuillTextEditor(props: Props) {
-  return <Quill modules={modules} formats={formats} theme="snow" onChange={props.onChange} />;
+  return <Quill modules={modules} formats={formats} theme="snow" onChange={props.onChange} defaultValue={props.defaultValue}/>;
 }

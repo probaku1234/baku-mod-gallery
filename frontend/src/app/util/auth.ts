@@ -19,7 +19,7 @@ export const authOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
     jwt({token, user}) {
-        if (user && user.email === "fhzotxldj@gmail.com") {
+        if (user && user.email === process.env.ADMIN_ACCOUNT!) {
           token.role = "admin";
         }
         return token;

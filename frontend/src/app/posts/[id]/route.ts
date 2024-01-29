@@ -67,8 +67,10 @@ export async function DELETE(
       },
     });
 
-    const data = await res.json();
-
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}`);
+    }
+    
     return NextResponse.json({ status: 200 });
   } catch (error) {
     console.error(error);
@@ -80,8 +82,6 @@ export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  console.log(request);
-
   const session = await getServerSession(authOptions);
 
   // Check if the user is authenticated
@@ -94,15 +94,13 @@ export async function PUT(
     return new Response(null, { status: 403 }); // User is authenticated but does not have the right permissions
   }
 
-  console.log(await request.json());
-
   try {
     const token = generateJwtToken({
       name: session.user.name!,
       role: session.user.role!,
     });
     const requestBody = await request.json();
-
+    console.log(requestBody);
     const uri = `${process.env.API_HOST!}/api/posts/${params.id}`;
     const res = await fetch(uri, {
       method: "PUT",
@@ -116,11 +114,13 @@ export async function PUT(
       },
     });
 
-    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}`);
+    }
 
     return NextResponse.json({ status: 200 });
   } catch (error) {
     console.error(error);
-    return NextResponse.error();
+    return NextResponse.json({ error }, { status: 500 });
   }
 }

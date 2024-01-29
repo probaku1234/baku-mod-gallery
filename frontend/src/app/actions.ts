@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { revalidatePath, revalidateTag } from "next/cache";
 import sanitizeHtml from "sanitize-html";
 import { generateJwtToken } from "./util/jwt";
+import { cookies, headers } from "next/headers"
 
 // FIXME: allow img tag
 export const createOrUpdatePost = async (
@@ -59,10 +60,13 @@ export const createOrUpdatePost = async (
       };
     }
 
+    const requestHeaders = new Headers(headers());
+
     const res = await fetch(requestUri, {
       ...requestOption,
       headers: {
-        "Content-Type": "application/json",
+        "content-type": "application/json",
+        "cookie": requestHeaders.get("cookie") as string
       },
       body: JSON.stringify(requestBody),
     });
@@ -97,6 +101,7 @@ export const deletePost = async (
     const postId = formData.get("postId");
     const res = await fetch(`${process.env.FRONT_HOST!}/posts/${postId}`, {
       method: "DELETE",
+      headers: headers(),
     });
 
     if (!res.ok) {
@@ -128,7 +133,8 @@ export const deleteAllPosts = async (
 ) => {
   try {
     const res = await fetch(`${process.env.FRONT_HOST!}/posts`, {
-      method: "POST",
+      method: "DELETE",
+      headers: headers(),
     });
 
     if (!res.ok) {

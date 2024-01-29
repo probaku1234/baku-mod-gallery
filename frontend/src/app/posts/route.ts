@@ -60,7 +60,9 @@ export async function POST(request: Request) {
       },
     });
 
-    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}`);
+    }
 
     return NextResponse.json({ status: 200 });
   } catch (error) {
@@ -72,6 +74,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
 
+  console.log("sex");
   // Check if the user is authenticated
   if (!session) {
     return new Response(null, { status: 401 }); // User is not authenticated
@@ -88,7 +91,7 @@ export async function DELETE(request: Request) {
       role: session.user.role!,
     });
 
-    const uri = `${process.env.API_HOST!}/api/posts/`;
+    const uri = `${process.env.API_HOST!}/api/posts`;
     const res = await fetch(uri, {
       method: "DELETE",
       headers: {
@@ -100,7 +103,9 @@ export async function DELETE(request: Request) {
       },
     });
 
-    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}`);
+    }
 
     return NextResponse.json({ status: 200 });
   } catch (error) {

@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ data });
   } catch (error) {
     console.error(error);
-    return NextResponse.error();
+    return NextResponse.json({ error }, { status: 500 });
   }
 }
 
@@ -62,10 +62,10 @@ export async function POST(request: Request) {
 
     const data = await res.json();
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ status: 200 });
   } catch (error) {
     console.error(error);
-    return NextResponse.error();
+    return NextResponse.json({ error }, { status: 500 });
   }
 }
 
@@ -102,9 +102,9 @@ export async function DELETE(request: Request) {
 
     const data = await res.json();
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ status: 200 });
   } catch (error) {
     console.error(error);
-    return NextResponse.error();
+    return NextResponse.json({ error }, { status: 500 });
   }
 }

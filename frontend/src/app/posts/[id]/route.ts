@@ -69,10 +69,10 @@ export async function DELETE(
 
     const data = await res.json();
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ status: 200 });
   } catch (error) {
     console.error(error);
-    return NextResponse.error();
+    return NextResponse.json({ error }, { status: 500 });
   }
 }
 
@@ -80,6 +80,8 @@ export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  console.log(request);
+
   const session = await getServerSession(authOptions);
 
   // Check if the user is authenticated
@@ -116,7 +118,7 @@ export async function PUT(
 
     const data = await res.json();
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ status: 200 });
   } catch (error) {
     console.error(error);
     return NextResponse.error();

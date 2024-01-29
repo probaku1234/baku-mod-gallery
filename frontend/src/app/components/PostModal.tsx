@@ -15,7 +15,7 @@ import { useState, useEffect } from "react";
 import { Tooltip } from "flowbite-react";
 import Image from "next/image";
 import { useFormState, useFormStatus } from "react-dom";
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation";
 
 interface Props {
   isOpen: boolean;
@@ -73,7 +73,7 @@ const PostModal = (props: Props) => {
       }
       alert(formState.message);
     }
-  }, [formState.message, formState.result, props])
+  }, [formState.message, formState.result, props]);
   return (
     <>
       <Modal show={props.isOpen} onClose={props.onClose}>
@@ -158,7 +158,12 @@ const PostModal = (props: Props) => {
               <div className="mb-2 block">
                 <Label htmlFor="mod_type">Mod Type</Label>
               </div>
-              <Select id="mod_type" name="modType" required>
+              <Select
+                id="mod_type"
+                name="modType"
+                defaultValue={props.post ? props.post.mod_type : "Outfit"}
+                required
+              >
                 <option>Outfit</option>
                 <option>Preset</option>
                 <option>Follower</option>

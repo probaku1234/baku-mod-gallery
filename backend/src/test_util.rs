@@ -1,5 +1,6 @@
 #[cfg(test)]
 pub mod test_util {
+    use jsonwebtoken::{encode, EncodingKey, Header};
     use mongodb::{
         bson::{doc, oid::ObjectId},
         Database,
@@ -8,7 +9,7 @@ pub mod test_util {
     use std::net::UdpSocket;
     use testcontainers::{GenericImage, RunnableImage};
 
-    use crate::posts::Post;
+    use crate::{jwt_auth::TokenClaims, posts::Post, AppState};
 
     pub fn generate_port_number() -> u16 {
         let address = "0.0.0.0:0";
@@ -57,5 +58,40 @@ pub mod test_util {
             .await;
 
         find_result.unwrap()
+    }
+
+    pub fn create_test_state(mongo: mongodb::Database) -> AppState {
+        AppState {
+            mongo,
+            jwt_key: "test_jwt_key".to_string(),
+            server_domain: "http://localhost:8000".to_string(),
+            client_domain: "http://localhost:3000".to_string(),
+        }
+    }
+
+    pub fn generate_test_jwt_token() -> String {
+        let my_claims = TokenClaims {
+            name: "b@b.com".to_owned(),
+            role: "admin".to_owned(),
+            iat: 1516239022,
+            exp: 9999999999,
+        };
+
+        let token = encode(
+            &Header::default(),
+            &my_claims,
+            &EncodingKey::from_secret("test_jwt_key".as_ref()),
+        )
+        .unwrap();
+
+        token
+    }
+
+    pub async fn count_all_posts(db: Database) -> u64 {
+        let typed_collection = db.collection::<Post>("posts");
+
+        let count = typed_collection.count_documents(None, None).await.unwrap();
+
+        count
     }
 }

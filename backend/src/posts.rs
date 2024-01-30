@@ -10,16 +10,25 @@ use axum::{
 };
 use futures::stream::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
+use mongodb::bson::serde_helpers::{
+    bson_datetime_as_rfc3339_string, hex_string_as_object_id,
+};
 use mongodb::bson::{doc, Bson, DateTime};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Post {
+    #[serde(with = "hex_string_as_object_id")]
+    _id: String,
     title: String,
+    content: String,
     images_url: Vec<String>,
     file_url: String,
+    mod_type: String,
+    #[serde(with = "bson_datetime_as_rfc3339_string")]
     created_at: DateTime,
+    #[serde(with = "bson_datetime_as_rfc3339_string")]
     updated_at: DateTime,
 }
 
@@ -27,16 +36,20 @@ pub struct Post {
 #[allow(non_snake_case)]
 pub struct NewPostRequest {
     title: String,
+    content: String,
     imagesUrl: Vec<String>,
     fileUrl: String,
+    modType: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[allow(non_snake_case)]
 pub struct EditPostRequest {
     title: String,
+    content: String,
     imagesUrl: Vec<String>,
     fileUrl: String,
+    modType: String,
 }
 
 pub async fn get_all_posts(
@@ -111,9 +124,12 @@ pub async fn create_new_post(
     let typed_collection = &state.mongo.collection::<Post>("posts");
 
     let new_post = Post {
+        _id: ObjectId::new().to_hex(),
         title: req.title,
+        content: req.content,
         images_url: req.imagesUrl,
         file_url: req.fileUrl,
+        mod_type: req.modType,
         created_at: DateTime::now(),
         updated_at: DateTime::now(),
     };
@@ -155,7 +171,8 @@ pub async fn edit_post(
             "title": req.title,
             "images_url": req.imagesUrl,
             "file_url": req.fileUrl,
-        }
+            "updated_at": DateTime::now().try_to_rfc3339_string().unwrap()
+        },
     };
 
     match typed_collection
@@ -163,7 +180,9 @@ pub async fn edit_post(
         .await
     {
         Ok(result) => match result {
-            Some(post) => Ok(Json(post)),
+            Some(post) => {
+                info!("Post {} edited", post._id);
+                Ok(Json(post))},
             None => {
                 error!("The post with id: {} not found!", id);
                 Err((
@@ -220,6 +239,24 @@ pub async fn delete_post(
     }
 }
 
+pub async fn delete_all_posts(
+    State(state): State<AppState>,
+) -> Result<StatusCode, impl IntoResponse> {
+    let typed_collection = &state.mongo.collection::<Post>("posts");
+
+    match typed_collection.delete_many(doc! {}, None).await {
+        Ok(result) => {
+            info!("{} posts deleted", result.deleted_count);
+            Ok(StatusCode::OK)
+        }
+        Err(err) => {
+            let error_message = err.to_string();
+            error!("{}", error_message.clone());
+            Err((StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response())
+        }
+    }
+}
+
 #[cfg(test)]
 use test_env_helpers::*;
 
@@ -228,14 +265,13 @@ use test_env_helpers::*;
 mod tests {
     use super::*;
     use crate::test_util::test_util::{
-        find_post_by_id, generate_port_number, get_db_connection_uri, get_mongo_image,
-        insert_test_post, populate_test_data,
+        count_all_posts, create_test_state, find_post_by_id, generate_port_number,
+        get_db_connection_uri, get_mongo_image, insert_test_post, populate_test_data,
     };
-    use crate::AppState;
     use mongodb::Client;
+    use serde_json::to_string;
     use testcontainers::clients;
 
-    // TODO: util functios for create, get
     async fn before_all() {
         // let docker = clients::Cli::default();
         // let port = generate_port_number();
@@ -255,7 +291,7 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState { mongo: test_db };
+        let state = create_test_state(test_db);
 
         let result = get_all_posts(State(state)).await;
 
@@ -279,7 +315,7 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState { mongo: test_db };
+        let state = create_test_state(test_db);
 
         let result = get_post_by_id(State(state), Path("aaaa".to_string())).await;
 
@@ -301,16 +337,21 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState { mongo: test_db.clone() };
+        let state = create_test_state(test_db.clone());
 
         let new_post_title = "aa".to_string();
+        let new_post_content = "content".to_string();
         let new_post_images_url: Vec<String> = vec![];
         let new_post_file_url = "aa".to_string();
+        let new_post_mod_type = "preset".to_string();
 
         let new_post = Post {
+            _id: ObjectId::new().to_hex(),
             title: new_post_title.clone(),
+            content: new_post_content.clone(),
             images_url: new_post_images_url.clone(),
             file_url: new_post_file_url.clone(),
+            mod_type: new_post_mod_type.clone(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
         };
@@ -318,10 +359,7 @@ mod tests {
         let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
         let object_id_string = inserted_post_object_id.to_hex();
 
-        let result = get_post_by_id(
-            State(state),
-            Path(object_id_string)
-        ).await;
+        let result = get_post_by_id(State(state), Path(object_id_string)).await;
 
         assert!(result.is_ok());
 
@@ -343,17 +381,20 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState {
-            mongo: test_db.clone(),
-        };
+        let state = create_test_state(test_db.clone());
+
         let new_post_title = "aa".to_string();
+        let new_post_content = "content".to_string();
         let new_post_images_url: Vec<String> = vec![];
         let new_post_file_url = "aa".to_string();
+        let new_post_mod_type = "preset".to_string();
 
         let new_post_request = NewPostRequest {
             title: new_post_title.clone(),
+            content: new_post_content.clone(),
             imagesUrl: new_post_images_url.clone(),
             fileUrl: new_post_file_url.clone(),
+            modType: new_post_mod_type.clone(),
         };
 
         let result = create_new_post(State(state), Json(new_post_request)).await;
@@ -378,26 +419,31 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState {
-            mongo: test_db.clone(),
-        };
+        let state = create_test_state(test_db.clone());
 
         let new_post = Post {
+            _id: ObjectId::new().to_hex(),
             title: "test post".to_string(),
+            content: "test content".to_string(),
             images_url: vec![],
             file_url: "test file url".to_string(),
+            mod_type: "aaa".to_string(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
         };
 
         let updated_title = "updated test post".to_string();
+        let updated_content = "updated content".to_string();
         let updated_image_url = vec!["one two three".to_string()];
         let updated_file_url = "updated file url".to_string();
+        let updated_mod_type = "aaaaa".to_string();
 
         let edit_post_request = EditPostRequest {
             title: updated_title.clone(),
+            content: updated_content.clone(),
             imagesUrl: updated_image_url.clone(),
             fileUrl: updated_file_url.clone(),
+            modType: updated_mod_type.clone(),
         };
 
         let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
@@ -431,14 +477,15 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let state = AppState {
-            mongo: test_db.clone(),
-        };
+        let state = create_test_state(test_db.clone());
 
         let new_post = Post {
+            _id: ObjectId::new().to_hex(),
             title: "test post".to_string(),
+            content: "test content".to_string(),
             images_url: vec![],
             file_url: "test file url".to_string(),
+            mod_type: "aaa".to_string(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
         };
@@ -452,5 +499,28 @@ mod tests {
         let find_result = find_post_by_id(test_db, inserted_post_object_id).await;
 
         assert!(find_result.is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_delete_all_posts() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        populate_test_data(&port);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+
+        let state = create_test_state(test_db.clone());
+
+        let result = delete_all_posts(State(state)).await;
+
+        assert!(result.is_ok());
+
+        let count_posts = count_all_posts(test_db).await;
+
+        assert_eq!(count_posts, 0);
     }
 }

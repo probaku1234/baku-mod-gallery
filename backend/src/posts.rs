@@ -136,7 +136,8 @@ pub async fn create_new_post(
 
     match typed_collection.insert_one(new_post, None).await {
         Ok(result) => {
-            info!("New Post Created");
+            let x = result.inserted_id.as_object_id().unwrap();
+            info!("New Post Created {}", x.to_hex());
             Ok(Json(result.inserted_id))
         }
         Err(err) => {

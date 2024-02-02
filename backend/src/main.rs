@@ -6,6 +6,7 @@ mod posts;
 mod router;
 mod test_util;
 
+use mongodb::{options::ClientOptions, Client};
 use router::create_api_router;
 
 #[derive(Clone)]
@@ -21,9 +22,17 @@ async fn main(
     #[shuttle_shared_db::MongoDb] mongo: mongodb::Database,
     #[shuttle_secrets::Secrets] secret_store: shuttle_secrets::SecretStore,
 ) -> shuttle_axum::ShuttleAxum {
-    let (jwt_key, server_domain, client_domain) = grab_secrets(secret_store);
+    //TODO: handle db connection error
+    let (jwt_key, server_domain, client_domain, mongo_id, mongo_password, db_name) =
+        grab_secrets(secret_store);
+
+    let mongo_connect_str = format!("mongodb+srv://{}:{}@my-mod-gallery-cluter0.nkvlp6a.mongodb.net/?retryWrites=true&w=majority", mongo_id, mongo_password);
+    let mut client_options = ClientOptions::parse(mongo_connect_str).await.unwrap();
+    let client = Client::with_options(client_options).unwrap();
+    let db = client.database(&db_name);
+
     let state = AppState {
-        mongo,
+        mongo: db,
         jwt_key,
         server_domain,
         client_domain,
@@ -39,7 +48,9 @@ fn app(state: AppState) -> Router {
     Router::new().nest("/api", api_router)
 }
 
-fn grab_secrets(secrets: shuttle_secrets::SecretStore) -> (String, String, String) {
+fn grab_secrets(
+    secrets: shuttle_secrets::SecretStore,
+) -> (String, String, String, String, String, String) {
     let jwt_key = secrets
         .get("JWT_SECRET")
         .unwrap_or_else(|| "None".to_string());
@@ -52,7 +63,24 @@ fn grab_secrets(secrets: shuttle_secrets::SecretStore) -> (String, String, Strin
         .get("CLIENT_DOMAIN")
         .unwrap_or_else(|| "None".to_string());
 
-    (jwt_key, server_domain, client_domain)
+    let mongo_id = secrets
+        .get("MONGO_ID")
+        .unwrap_or_else(|| "None".to_string());
+
+    let mongo_password = secrets
+        .get("MONGO_PASSWORD")
+        .unwrap_or_else(|| "None".to_string());
+
+    let db_name = secrets.get("DB_NAME").unwrap_or_else(|| "None".to_string());
+
+    (
+        jwt_key,
+        server_domain,
+        client_domain,
+        mongo_id,
+        mongo_password,
+        db_name,
+    )
 }
 
 #[cfg(test)]
@@ -431,7 +459,6 @@ mod tests {
         let new_post_images_url: Vec<String> = vec![];
         let new_post_file_url = "aa".to_string();
         let new_post_mod_type = "preset".to_string();
-
 
         let server = TestServer::new(app).unwrap();
 

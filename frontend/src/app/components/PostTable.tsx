@@ -1,6 +1,13 @@
 "use client";
 
-import { Button, Tooltip, Table, Label, TextInput } from "flowbite-react";
+import {
+  Button,
+  Tooltip,
+  Table,
+  Label,
+  TextInput,
+  Spinner,
+} from "flowbite-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
@@ -9,7 +16,7 @@ import { Toast } from "flowbite-react";
 import { HiCheck, HiExclamation, HiX } from "react-icons/hi";
 import debounce from "debounce";
 import { deleteAllPosts, deletePost } from "@/app/actions";
-import { useFormState } from "react-dom";
+import { useRouter } from "next/navigation";
 
 interface Props {
   posts: IPost[];
@@ -28,14 +35,8 @@ const PostTable = (props: Props) => {
   const [filteredPosts, setFilteredPosts] = useState<IPost[]>(
     props.posts.slice()
   );
-  const [deleteAllFromState, deleteAllFormAction] = useFormState(
-    deleteAllPosts,
-    initialFormState
-  );
-  const [deleteFromState, deleteFormAction] = useFormState(
-    deletePost,
-    initialFormState
-  );
+  const [pending, setPending] = useState(false);
+  const router = useRouter();
 
   const onClose = () => {
     setOpen(false);
@@ -78,6 +79,11 @@ const PostTable = (props: Props) => {
       )} */}
 
       <div className="pb-4 bg-white dark:bg-gray-900">
+        {pending && (
+          <div className="absolute bg-white bg-opacity-60 z-10 h-full w-full flex items-center justify-center">
+            <Spinner size="xl" />
+          </div>
+        )}
         <Label htmlFor="table-search" className="sr-only">
           Search
         </Label>
@@ -159,7 +165,16 @@ const PostTable = (props: Props) => {
                     Edit
                   </Button>
                   <form
-                    action={deleteFormAction}
+                    action={async (formData) => {
+                      setPending(true);
+                      const formResult = await deletePost(
+                        initialFormState,
+                        formData
+                      );
+                      alert(formResult.message);
+                      setPending(false);
+                      router.refresh();
+                    }}
                     onSubmit={() => {
                       if (
                         !confirm(
@@ -167,6 +182,9 @@ const PostTable = (props: Props) => {
                         )
                       ) {
                         return false;
+                      } else {
+                        setPending(true);
+                        return true;
                       }
                     }}
                   >
@@ -188,7 +206,13 @@ const PostTable = (props: Props) => {
       <div className="flex gap-2">
         <Button onClick={() => openCreatePostModal()}>Create New Post</Button>
         <form
-          action={deleteAllFormAction}
+          action={async (formData) => {
+            setPending(true);
+            const formResult = await deleteAllPosts(initialFormState, formData);
+            alert(formResult.message);
+            setPending(false);
+            router.refresh();
+          }}
           onSubmit={() => {
             if (
               !confirm(
@@ -196,6 +220,9 @@ const PostTable = (props: Props) => {
               )
             ) {
               return false;
+            } else {
+              setPending(true);
+              return true;
             }
           }}
         >

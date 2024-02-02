@@ -14,7 +14,6 @@ import { RxPlus } from "react-icons/rx";
 import { useState, useEffect } from "react";
 import { Tooltip } from "flowbite-react";
 import Image from "next/image";
-import { useFormState, useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 
 interface Props {
@@ -25,27 +24,24 @@ interface Props {
 
 const PostModal = (props: Props) => {
   const [imageUrls, setImageUrls] = useState(
-    props.post ? props.post.images_url : []
+    props.post ? props.post.images_url.slice() : []
   );
   const [content, setContent] = useState<string>(
     props.post ? props.post.content : ""
   );
-  const { pending } = useFormStatus();
+  const [pending, setPending] = useState(false);
   const initialFormState = {
     result: "",
     message: "",
   };
-  const [formState, formAction] = useFormState(
-    createOrUpdatePost,
-    initialFormState
-  );
   const router = useRouter();
 
-  const imageUrlTooltipContent = () => {
+  const imageUrlTooltipContent = (url: string) => {
+    console.log(url);
     return (
       <>
         <Image
-          src="https://ac-p1.namu.la/20240116sac/b593bf5655f3533ba51f7141f107198153b7769b75ef727a1a735e74bf73a02b.png?expires=1706117467&key=Dyjt8aawJkorrkxIE8Pdvg&type=orig"
+          src={url}
           width={800}
           height={800}
           className="w-16 md:w-32 max-w-full max-h-full"
@@ -68,14 +64,20 @@ const PostModal = (props: Props) => {
     setContent(content);
   };
 
+  // useEffect(() => {
+  //   if (formState.result) {
+  //     if (formState.result === "success") {
+  //       props.onClose();
+  //       router.replace("/admin")
+  //     }
+  //     alert(formState.message);
+  //   }
+  // }, [formState.message, formState.result, props, router]);
+
   useEffect(() => {
-    if (formState.result) {
-      if (formState.result === "success") {
-        props.onClose();
-      }
-      alert(formState.message);
-    }
-  }, [formState.message, formState.result, props]);
+    console.log(imageUrls);
+  }, [imageUrls]);
+
   return (
     <>
       <Modal show={props.isOpen} onClose={props.onClose}>
@@ -90,8 +92,19 @@ const PostModal = (props: Props) => {
         <Modal.Body>
           <form
             className="flex flex-col gap-4"
-            action={formAction}
+            action={async (formData) => {
+              // setPending(true);
+              const formResult = await createOrUpdatePost(initialFormState, formData);
+              alert(formResult.message);
+              setPending(false);
+              props.onClose();
+              router.refresh();
+            }}
             method="POST"
+            onSubmit={() => {
+              setPending(true)
+              return true;
+            }}
           >
             <TextInput
               type="hidden"
@@ -124,7 +137,7 @@ const PostModal = (props: Props) => {
                 {imageUrls.map((url, index) => (
                   <div key={`url${index}`} className="w-full gap-4">
                     <Tooltip
-                      content={imageUrlTooltipContent()}
+                      content={imageUrlTooltipContent(url)}
                       placement="auto"
                     >
                       <TextInput

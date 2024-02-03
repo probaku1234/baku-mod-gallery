@@ -23,9 +23,7 @@ interface Props {
 }
 
 const PostModal = (props: Props) => {
-  const [imageUrls, setImageUrls] = useState(
-    props.post ? props.post.images_url.slice() : []
-  );
+  const [imageUrls, setImageUrls] = useState([""]);
   const [content, setContent] = useState<string>(
     props.post ? props.post.content : ""
   );
@@ -50,11 +48,6 @@ const PostModal = (props: Props) => {
       </>
     );
   };
-  // const createOrUpdatePostWithId = createOrUpdatePost.bind(
-  //   null,
-  //   props.post ? props.post._id.$oid : "",
-  //   content
-  // );
 
   const handleClickPlusIcon = () => {
     setImageUrls([...imageUrls, ""]);
@@ -64,19 +57,17 @@ const PostModal = (props: Props) => {
     setContent(content);
   };
 
-  // useEffect(() => {
-  //   if (formState.result) {
-  //     if (formState.result === "success") {
-  //       props.onClose();
-  //       router.replace("/admin")
-  //     }
-  //     alert(formState.message);
-  //   }
-  // }, [formState.message, formState.result, props, router]);
+  useEffect(() => {
+    if (props.post) {
+      setImageUrls(props.post.images_url);
+    }
+  }, [props.post]);
 
   useEffect(() => {
-    console.log(imageUrls);
-  }, [imageUrls]);
+    if (!props.isOpen && imageUrls[0] !== "") {
+      setImageUrls([""]);
+    }
+  }, [imageUrls, props.isOpen]);
 
   return (
     <>
@@ -93,8 +84,10 @@ const PostModal = (props: Props) => {
           <form
             className="flex flex-col gap-4"
             action={async (formData) => {
-              // setPending(true);
-              const formResult = await createOrUpdatePost(initialFormState, formData);
+              const formResult = await createOrUpdatePost(
+                initialFormState,
+                formData
+              );
               alert(formResult.message);
               setPending(false);
               props.onClose();
@@ -102,7 +95,7 @@ const PostModal = (props: Props) => {
             }}
             method="POST"
             onSubmit={() => {
-              setPending(true)
+              setPending(true);
               return true;
             }}
           >
@@ -136,22 +129,15 @@ const PostModal = (props: Props) => {
               <div className="gap-4">
                 {imageUrls.map((url, index) => (
                   <div key={`url${index}`} className="w-full gap-4">
-                    <Tooltip
-                      content={imageUrlTooltipContent(url)}
-                      placement="auto"
-                    >
-                      <TextInput
-                        id={`url${index}`}
-                        className="w-full"
-                        type="url"
-                        name={`imageUrl${index}`}
-                        defaultValue={
-                          props.post ? props.post.images_url[index] : undefined
-                        }
-                        placeholder={props.post ? undefined : "URL"}
-                        required
-                      />
-                    </Tooltip>
+                    <TextInput
+                      id={`url${index}`}
+                      className="w-full"
+                      type="url"
+                      name={`imageUrl${index}`}
+                      defaultValue={props.post ? imageUrls[index] : undefined}
+                      placeholder={props.post ? undefined : "URL"}
+                      required
+                    />
                   </div>
                 ))}
               </div>

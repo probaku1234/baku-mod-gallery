@@ -1,6 +1,7 @@
 use crate::jwt_auth::auth_jwt;
 use crate::posts::{
     create_new_post, delete_all_posts, delete_post, edit_post, get_all_posts, get_post_by_id,
+    sync_posts,
 };
 use crate::AppState;
 use axum::routing::delete;
@@ -32,7 +33,8 @@ pub fn create_api_router(state: AppState) -> Router {
         .route("/", delete(delete_all_posts))
         .layer(middleware::from_fn_with_state(state.clone(), auth_jwt))
         .route("/", get(get_all_posts))
-        .route("/:id", post(get_post_by_id));
+        .route("/:id", post(get_post_by_id))
+        .route("/sync", get(sync_posts));
 
     Router::new()
         .nest("/posts", posts_router)

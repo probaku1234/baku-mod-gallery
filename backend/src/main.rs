@@ -1,12 +1,18 @@
 use axum::Router;
 use mongodb;
 
+mod errors;
 mod jwt_auth;
 mod posts;
 mod router;
+mod sync_job;
+mod sync_post;
 mod test_util;
+mod util;
 
-use mongodb::{options::ClientOptions, Client};
+use crate::errors::SetupError;
+use anyhow::Error;
+use mongodb::{options::ClientOptions, Client, Database};
 use router::create_api_router;
 
 #[derive(Clone)]
@@ -15,27 +21,32 @@ pub struct AppState {
     pub jwt_key: String,
     pub server_domain: String,
     pub client_domain: String,
+    pub patreon_access_token: String,
 }
 
 #[shuttle_runtime::main]
 async fn main(
-    #[shuttle_shared_db::MongoDb] mongo: mongodb::Database,
     #[shuttle_secrets::Secrets] secret_store: shuttle_secrets::SecretStore,
 ) -> shuttle_axum::ShuttleAxum {
     //TODO: handle db connection error
-    let (jwt_key, server_domain, client_domain, mongo_id, mongo_password, db_name) =
-        grab_secrets(secret_store);
+    let (
+        jwt_key,
+        server_domain,
+        client_domain,
+        mongo_id,
+        mongo_password,
+        patreon_access_token,
+        db_name,
+    ) = grab_secrets(secret_store);
 
-    let mongo_connect_str = format!("mongodb+srv://{}:{}@my-mod-gallery-cluter0.nkvlp6a.mongodb.net/?retryWrites=true&w=majority", mongo_id, mongo_password);
-    let mut client_options = ClientOptions::parse(mongo_connect_str).await.unwrap();
-    let client = Client::with_options(client_options).unwrap();
-    let db = client.database(&db_name);
+    let db = connect_mongo(mongo_id, mongo_password, db_name).await?;
 
     let state = AppState {
         mongo: db,
         jwt_key,
         server_domain,
         client_domain,
+        patreon_access_token,
     };
 
     Ok(app(state).into())
@@ -50,7 +61,7 @@ fn app(state: AppState) -> Router {
 
 fn grab_secrets(
     secrets: shuttle_secrets::SecretStore,
-) -> (String, String, String, String, String, String) {
+) -> (String, String, String, String, String, String, String) {
     let jwt_key = secrets
         .get("JWT_SECRET")
         .unwrap_or_else(|| "None".to_string());
@@ -71,6 +82,10 @@ fn grab_secrets(
         .get("MONGO_PASSWORD")
         .unwrap_or_else(|| "None".to_string());
 
+    let patreon_access_token = secrets
+        .get("PATREON_ACCESS_TOKEN")
+        .unwrap_or_else(|| "None".to_string());
+
     let db_name = secrets.get("DB_NAME").unwrap_or_else(|| "None".to_string());
 
     (
@@ -79,8 +94,33 @@ fn grab_secrets(
         client_domain,
         mongo_id,
         mongo_password,
+        patreon_access_token,
         db_name,
     )
+}
+
+async fn connect_mongo(
+    mongo_id: String,
+    mongo_password: String,
+    db_name: String,
+) -> anyhow::Result<Database> {
+    let mongo_connect_str = format!("mongodb+srv://{}:{}@my-mod-gallery-cluter0.nkvlp6a.mongodb.net/?retryWrites=true&w=majority", mongo_id, mongo_password);
+    let client_options_result = ClientOptions::parse(mongo_connect_str).await;
+
+    if client_options_result.is_err() {
+        let error = client_options_result.err().unwrap().to_string();
+        return Err(Error::from(SetupError(error)));
+    }
+    let client_options = client_options_result.unwrap();
+
+    let client_result = Client::with_options(client_options);
+    if client_result.is_err() {
+        let error = client_result.err().unwrap().to_string();
+        return Err(Error::from(SetupError(error)));
+    }
+    let client = client_result.unwrap();
+
+    Ok(client.database(&db_name))
 }
 
 #[cfg(test)]

@@ -2,8 +2,7 @@ use axum::{
     extract::{Request, State},
     http::{header, StatusCode},
     middleware::Next,
-    response::{IntoResponse, Response},
-    Json,
+    response::IntoResponse,
 };
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};

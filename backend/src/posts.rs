@@ -1,6 +1,7 @@
 use std::str::FromStr;
 use std::vec;
 
+use crate::sync_post::sync_post;
 use crate::AppState;
 use axum::response::IntoResponse;
 use axum::{
@@ -10,18 +11,17 @@ use axum::{
 };
 use futures::stream::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
-use mongodb::bson::serde_helpers::{
-    bson_datetime_as_rfc3339_string, hex_string_as_object_id,
-};
+use mongodb::bson::serde_helpers::{bson_datetime_as_rfc3339_string, hex_string_as_object_id};
 use mongodb::bson::{doc, Bson, DateTime};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Post {
     #[serde(with = "hex_string_as_object_id")]
     _id: String,
     title: String,
+    patreon_post_id: String,
     content: String,
     images_url: Vec<String>,
     file_url: String,
@@ -30,6 +30,30 @@ pub struct Post {
     created_at: DateTime,
     #[serde(with = "bson_datetime_as_rfc3339_string")]
     updated_at: DateTime,
+    #[serde(with = "bson_datetime_as_rfc3339_string")]
+    synced_at: DateTime,
+}
+
+impl Post {
+    pub fn new_for_sync(
+        patreon_post_id: &str,
+        title: &str,
+        content: &str,
+        date_string: &str,
+    ) -> Self {
+        Post {
+            _id: ObjectId::new().to_hex(),
+            patreon_post_id: patreon_post_id.to_string(),
+            title: title.to_string(),
+            content: content.to_string(),
+            images_url: vec![],
+            file_url: "".to_string(),
+            mod_type: "".to_string(),
+            created_at: DateTime::now(),
+            updated_at: DateTime::from_chrono(get_chrono_dt_from_string(date_string.to_string())),
+            synced_at: DateTime::now(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -125,6 +149,7 @@ pub async fn create_new_post(
 
     let new_post = Post {
         _id: ObjectId::new().to_hex(),
+        patreon_post_id: "".to_string(),
         title: req.title,
         content: req.content,
         images_url: req.imagesUrl,
@@ -132,6 +157,7 @@ pub async fn create_new_post(
         mod_type: req.modType,
         created_at: DateTime::now(),
         updated_at: DateTime::now(),
+        synced_at: DateTime::now(),
     };
 
     match typed_collection.insert_one(new_post, None).await {
@@ -183,7 +209,8 @@ pub async fn edit_post(
         Ok(result) => match result {
             Some(post) => {
                 info!("Post {} edited", post._id);
-                Ok(Json(post))},
+                Ok(Json(post))
+            }
             None => {
                 error!("The post with id: {} not found!", id);
                 Err((
@@ -258,6 +285,31 @@ pub async fn delete_all_posts(
     }
 }
 
+pub async fn sync_posts(State(state): State<AppState>) -> StatusCode {
+    let x = state.mongo.clone();
+
+    let count_job_result = count_running_sync_job(x.clone()).await;
+
+    if count_job_result.is_err() {
+        error!("fail to count sync job");
+        return StatusCode::OK;
+    }
+    let running_job_num = count_job_result.unwrap();
+
+    if running_job_num > 0 {
+        info!("there is already running job!");
+        return StatusCode::OK;
+    }
+
+    tokio::spawn(async move {
+        sync_post(x, state.patreon_access_token).await;
+    });
+
+    StatusCode::OK
+}
+
+use crate::sync_job::count_running_sync_job;
+use crate::util::get_chrono_dt_from_string;
 #[cfg(test)]
 use test_env_helpers::*;
 
@@ -348,6 +400,7 @@ mod tests {
 
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
+            patreon_post_id: "123123".to_string(),
             title: new_post_title.clone(),
             content: new_post_content.clone(),
             images_url: new_post_images_url.clone(),
@@ -355,6 +408,7 @@ mod tests {
             mod_type: new_post_mod_type.clone(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
+            synced_at: DateTime::now(),
         };
 
         let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
@@ -424,6 +478,7 @@ mod tests {
 
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
+            patreon_post_id: "123123".to_string(),
             title: "test post".to_string(),
             content: "test content".to_string(),
             images_url: vec![],
@@ -431,6 +486,7 @@ mod tests {
             mod_type: "aaa".to_string(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
+            synced_at: DateTime::now(),
         };
 
         let updated_title = "updated test post".to_string();
@@ -482,6 +538,7 @@ mod tests {
 
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
+            patreon_post_id: "123123".to_string(),
             title: "test post".to_string(),
             content: "test content".to_string(),
             images_url: vec![],
@@ -489,6 +546,7 @@ mod tests {
             mod_type: "aaa".to_string(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
+            synced_at: DateTime::now(),
         };
 
         let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;

@@ -66,6 +66,7 @@ pub mod test_util {
             jwt_key: "test_jwt_key".to_string(),
             server_domain: "http://localhost:8000".to_string(),
             client_domain: "http://localhost:3000".to_string(),
+            patreon_access_token: "asdfasdfasdf".to_string(),
         }
     }
 

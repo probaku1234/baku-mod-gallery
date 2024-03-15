@@ -1,6 +1,7 @@
 use crate::posts::Post;
 use crate::sync_job::{create_sync_job, delete_sync_job};
 use crate::util::convert_to_rfc3999_string;
+use chrono::{NaiveTime, Utc};
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::serde_helpers::{bson_datetime_as_rfc3339_string, hex_string_as_object_id};
 use mongodb::bson::{doc, DateTime};
@@ -17,6 +18,7 @@ pub struct SyncResult {
     is_success: bool,
     message: String,
     sync_count: usize,
+    elapsed_time: i64,
     #[serde(with = "bson_datetime_as_rfc3339_string")]
     synced_at: DateTime,
 }
@@ -72,6 +74,7 @@ pub struct PatreonPost {
 }
 
 pub async fn sync_post(mongo: Database, patreon_access_token: String) {
+    let start_time = Utc::now().time();
     let create_job_result = create_sync_job(mongo.clone()).await;
 
     if create_job_result.is_err() {
@@ -99,7 +102,13 @@ pub async fn sync_post(mongo: Database, patreon_access_token: String) {
 
         if response_result.is_err() {
             let error = response_result.as_ref().err().unwrap();
-            save_sync_result(mongo, error.to_string(), sync_count.lock().await.to_owned()).await;
+            save_sync_result(
+                mongo,
+                error.to_string(),
+                sync_count.lock().await.to_owned(),
+                start_time,
+            )
+            .await;
             return;
         }
 
@@ -107,7 +116,13 @@ pub async fn sync_post(mongo: Database, patreon_access_token: String) {
         let data_result: reqwest::Result<PatreonPostsApiResult> = response.json().await;
         if data_result.is_err() {
             let error = data_result.as_ref().err().unwrap();
-            save_sync_result(mongo, error.to_string(), sync_count.lock().await.to_owned()).await;
+            save_sync_result(
+                mongo,
+                error.to_string(),
+                sync_count.lock().await.to_owned(),
+                start_time,
+            )
+            .await;
             return;
         }
 
@@ -126,8 +141,13 @@ pub async fn sync_post(mongo: Database, patreon_access_token: String) {
                 published_at: post.attributes.published_at,
             })
             .collect();
-        let upsert_result =
-            upsert_posts(mongo.clone(), patreon_posts, Arc::clone(&sync_count)).await;
+        let upsert_result = upsert_posts(
+            mongo.clone(),
+            patreon_posts,
+            Arc::clone(&sync_count),
+            start_time,
+        )
+        .await;
 
         if !upsert_result {
             return;
@@ -142,6 +162,7 @@ pub async fn sync_post(mongo: Database, patreon_access_token: String) {
         mongo.clone(),
         "".to_string(),
         sync_count.lock().await.to_owned(),
+        start_time,
     )
     .await;
 
@@ -152,7 +173,14 @@ pub async fn sync_post(mongo: Database, patreon_access_token: String) {
     }
 }
 
-async fn save_sync_result(mongo: Database, message: String, sync_count: usize) {
+async fn save_sync_result(
+    mongo: Database,
+    message: String,
+    sync_count: usize,
+    start_time: NaiveTime,
+) {
+    let end_time = Utc::now().time();
+    let elapsed_time = (end_time - start_time).num_milliseconds();
     let typed_collection = mongo.collection::<SyncResult>("SyncResult");
     let is_success = if message.is_empty() { true } else { false };
     let new_sync_result = SyncResult {
@@ -160,6 +188,7 @@ async fn save_sync_result(mongo: Database, message: String, sync_count: usize) {
         is_success,
         message,
         sync_count,
+        elapsed_time,
         synced_at: DateTime::now(),
     };
 
@@ -178,6 +207,7 @@ async fn upsert_posts(
     mongo: Database,
     mut patreon_posts: Vec<PatreonPost>,
     sync_count: Arc<Mutex<usize>>,
+    start_time: NaiveTime,
 ) -> bool {
     let typed_collection = mongo.collection::<Post>("posts");
     let new_posts = Arc::new(Mutex::new(vec![]));
@@ -228,6 +258,7 @@ async fn upsert_posts(
                     mongo.clone(),
                     err.to_string(),
                     sync_count.lock().await.to_owned(),
+                    start_time,
                 )
                 .await;
                 let mut is_update_success = is_update_success.lock().await;
@@ -245,7 +276,7 @@ async fn upsert_posts(
     let new_posts = new_posts.lock().await;
     if !new_posts.is_empty() {
         let x = new_posts.to_vec();
-        return insert_posts(mongo.clone(), x, Arc::clone(&sync_count)).await;
+        return insert_posts(mongo.clone(), x, Arc::clone(&sync_count), start_time).await;
     }
 
     true
@@ -255,6 +286,7 @@ async fn insert_posts(
     mongo: Database,
     new_posts: Vec<Post>,
     sync_count: Arc<Mutex<usize>>,
+    start_time: NaiveTime,
 ) -> bool {
     let typed_collection = mongo.collection::<Post>("posts");
 
@@ -267,7 +299,13 @@ async fn insert_posts(
             true
         }
         Err(err) => {
-            save_sync_result(mongo, err.to_string(), sync_count.lock().await.to_owned()).await;
+            save_sync_result(
+                mongo,
+                err.to_string(),
+                sync_count.lock().await.to_owned(),
+                start_time,
+            )
+            .await;
             false
         }
     }

@@ -15,6 +15,15 @@ pub struct SyncJob {
     started_at: DateTime,
 }
 
+impl SyncJob {
+    pub fn new() -> Self {
+        SyncJob {
+            _id: ObjectId::new().to_hex(),
+            started_at: DateTime::now(),
+        }
+    }
+}
+
 pub async fn create_sync_job(mongo: Database) -> Result<String, error::Error> {
     let typed_collection = mongo.collection::<SyncJob>("SyncJob");
 

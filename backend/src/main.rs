@@ -1,6 +1,7 @@
 use axum::Router;
 use mongodb;
 
+mod dao;
 mod errors;
 mod jwt_auth;
 mod posts;

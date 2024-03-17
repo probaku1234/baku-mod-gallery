@@ -209,7 +209,7 @@ async fn upsert_posts(
     sync_count: Arc<Mutex<usize>>,
     start_time: NaiveTime,
 ) -> bool {
-    let typed_collection = mongo.collection::<Post>("posts");
+    let typed_collection = mongo.collection::<Post>("Post");
     let new_posts = Arc::new(Mutex::new(vec![]));
     let is_update_success = Arc::new(Mutex::new(true));
 
@@ -288,7 +288,7 @@ async fn insert_posts(
     sync_count: Arc<Mutex<usize>>,
     start_time: NaiveTime,
 ) -> bool {
-    let typed_collection = mongo.collection::<Post>("posts");
+    let typed_collection = mongo.collection::<Post>("Post");
 
     match typed_collection.insert_many(new_posts, None).await {
         Ok(result) => {

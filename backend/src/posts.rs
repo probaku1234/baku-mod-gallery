@@ -79,7 +79,7 @@ pub struct EditPostRequest {
 pub async fn get_all_posts(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<Post>>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
+    let typed_collection = &state.mongo.collection::<Post>("Post");
 
     // let filter = doc! {};
     // let find_option = FindOptions::builder().build();
@@ -106,7 +106,7 @@ pub async fn get_post_by_id(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Post>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
+    let typed_collection = &state.mongo.collection::<Post>("Post");
 
     let target_post_object_id_result = ObjectId::from_str(&id);
 
@@ -145,7 +145,7 @@ pub async fn create_new_post(
     State(state): State<AppState>,
     Json(req): Json<NewPostRequest>,
 ) -> Result<Json<Bson>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
+    let typed_collection = &state.mongo.collection::<Post>("Post");
 
     let new_post = Post {
         _id: ObjectId::new().to_hex(),
@@ -179,7 +179,7 @@ pub async fn edit_post(
     Path(id): Path<String>,
     Json(req): Json<EditPostRequest>,
 ) -> Result<Json<Post>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
+    let typed_collection = &state.mongo.collection::<Post>("Post");
 
     let target_post_object_id_result = ObjectId::from_str(&id);
 
@@ -232,7 +232,7 @@ pub async fn delete_post(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
+    let typed_collection = &state.mongo.collection::<Post>("Post");
 
     let target_post_object_id_result = ObjectId::from_str(&id);
 
@@ -270,7 +270,7 @@ pub async fn delete_post(
 pub async fn delete_all_posts(
     State(state): State<AppState>,
 ) -> Result<StatusCode, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
+    let typed_collection = &state.mongo.collection::<Post>("Post");
 
     match typed_collection.delete_many(doc! {}, None).await {
         Ok(result) => {

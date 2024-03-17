@@ -39,14 +39,14 @@ pub mod test_util {
     }
 
     pub async fn insert_test_post(db: Database, new_post: Post) -> ObjectId {
-        let typed_collection = db.collection::<Post>("posts");
+        let typed_collection = db.collection::<Post>("Post");
 
         let insert_result = typed_collection.insert_one(new_post, None).await.unwrap();
         insert_result.inserted_id.as_object_id().unwrap()
     }
 
     pub async fn find_post_by_id(db: Database, id: ObjectId) -> Option<Post> {
-        let typed_collection = db.collection::<Post>("posts");
+        let typed_collection = db.collection::<Post>("Post");
 
         let find_result = typed_collection
             .find_one(
@@ -89,7 +89,7 @@ pub mod test_util {
     }
 
     pub async fn count_all_posts(db: Database) -> u64 {
-        let typed_collection = db.collection::<Post>("posts");
+        let typed_collection = db.collection::<Post>("Post");
 
         let count = typed_collection.count_documents(None, None).await.unwrap();
 

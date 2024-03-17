@@ -313,13 +313,51 @@ async fn insert_posts(
 
 #[cfg(test)]
 mod tests {
-    use chrono::prelude::*;
-    use mongodb::bson;
+    use super::*;
+    use crate::test_util::test_util::{
+        count_all_posts, create_test_state, find_post_by_id, generate_port_number,
+        get_db_connection_uri, get_mongo_image, insert_test_post, populate_test_data,
+    };
+    use futures::TryStreamExt;
+    use mongodb::Client;
+    use testcontainers::clients;
 
-    #[test]
-    fn pika() {
-        let chrono_dt: DateTime<Utc> = "2022-03-14T05:23:49.000+00:00".parse().unwrap();
-        let bson_dt = bson::DateTime::from_chrono(chrono_dt);
-        println!("{}", bson_dt.try_to_rfc3339_string().unwrap());
+    #[tokio::test]
+    async fn test_save_sync_result_success() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        populate_test_data(&port);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+
+        save_sync_result(test_db.clone(), "".to_string(), 30, Utc::now().time()).await;
+
+        let typed_collection = test_db.collection::<SyncResult>("SyncResult");
+        let x = typed_collection.find(None, None).await.unwrap();
+
+        let sync_results: Vec<SyncResult> = x.try_collect().await.unwrap();
+
+        assert_eq!(sync_results.len(), 1);
+        let sync_result = sync_results.get(0).unwrap();
+
+        assert_eq!(sync_result.is_success, true);
+        assert_eq!(sync_result.sync_count, 30);
+    }
+
+    #[tokio::test]
+    async fn test_save_sync_result_fail() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        populate_test_data(&port);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
     }
 }

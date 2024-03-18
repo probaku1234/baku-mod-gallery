@@ -1,7 +1,8 @@
+use crate::dao::{count_docs, delete_one_doc, insert_one_doc};
+use anyhow::{Error, Result};
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::serde_helpers::{bson_datetime_as_rfc3339_string, hex_string_as_object_id};
 use mongodb::bson::{doc, DateTime};
-use mongodb::error;
 use mongodb::Database;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -24,35 +25,24 @@ impl SyncJob {
     }
 }
 
-pub async fn create_sync_job(mongo: Database) -> Result<String, error::Error> {
-    let typed_collection = mongo.collection::<SyncJob>("SyncJob");
+pub async fn create_sync_job(mongo: Database) -> Result<String> {
+    let new_job = SyncJob::new();
 
-    let new_job = SyncJob {
-        _id: ObjectId::new().to_hex(),
-        started_at: DateTime::now(),
-    };
-
-    match typed_collection.insert_one(new_job, None).await {
-        Ok(result) => Ok(result.inserted_id.as_object_id().unwrap().to_hex()),
+    match insert_one_doc::<SyncJob>(mongo, new_job).await {
+        Ok(inserted_id) => Ok(inserted_id.as_object_id().unwrap().to_hex()),
         Err(err) => {
             error!("{}", err.to_string());
-            Err(err)
+            Err(Error::from(Error::from(err)))
         }
     }
 }
 
-pub async fn delete_sync_job(mongo: Database, object_id: String) -> Result<(), error::Error> {
-    let typed_collection = mongo.collection::<SyncJob>("SyncJob");
+pub async fn delete_sync_job(mongo: Database, object_id: String) -> Result<()> {
+    let filter = doc! {
+        "_id": ObjectId::from_str(&*object_id).unwrap()
+    };
 
-    match typed_collection
-        .find_one_and_delete(
-            doc! {
-                "_id": ObjectId::from_str(&*object_id).unwrap()
-            },
-            None,
-        )
-        .await
-    {
+    match delete_one_doc::<SyncJob>(mongo, filter).await {
         Ok(result) => {
             match result {
                 Some(job) => {
@@ -67,13 +57,98 @@ pub async fn delete_sync_job(mongo: Database, object_id: String) -> Result<(), e
         }
         Err(err) => {
             error!("{}", err.to_string());
-            Err(err)
+            Err(Error::from(err))
         }
     }
 }
 
-pub async fn count_running_sync_job(mongo: Database) -> Result<u64, error::Error> {
-    let typed_collection = mongo.collection::<SyncJob>("SyncJob");
+pub async fn count_running_sync_job(mongo: Database) -> Result<u64> {
+    count_docs::<SyncJob>(mongo).await
+}
 
-    typed_collection.count_documents(None, None).await
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dao::find_one_doc;
+    use crate::test_util::test_util::{
+        generate_port_number, get_db_connection_uri, get_mongo_image,
+    };
+    use mongodb::Client;
+    use testcontainers::clients;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_create_sync_job() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+
+        let result = create_sync_job(test_db).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_delete_sync_job() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+
+        let insert_result = create_sync_job(test_db.clone()).await;
+
+        let job_id = insert_result.unwrap();
+
+        let result = delete_sync_job(test_db.clone(), job_id.clone()).await;
+
+        assert!(result.is_ok());
+
+        let filter = doc! {
+            "_id": ObjectId::from_str(&*job_id).unwrap()
+        };
+
+        let find_result = find_one_doc::<SyncJob>(test_db, filter).await;
+
+        assert!(find_result.is_ok());
+
+        assert!(find_result.unwrap().is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_count_running_sync_job() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+
+        create_sync_job(test_db.clone())
+            .await
+            .expect("Fail to create SyncJob");
+        create_sync_job(test_db.clone())
+            .await
+            .expect("Fail to create SyncJob");
+        create_sync_job(test_db.clone())
+            .await
+            .expect("Fail to create SyncJob");
+
+        let result = count_running_sync_job(test_db).await;
+
+        assert!(result.is_ok());
+
+        let count = result.unwrap();
+
+        assert_eq!(count, 3);
+    }
 }

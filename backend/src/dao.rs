@@ -6,7 +6,7 @@ use mongodb::options::ReturnDocument::After;
 use mongodb::Database;
 use serde::Serialize;
 use std::any::type_name;
-use tracing::{error, info};
+use tracing::error;
 
 // TODO: error logging??
 pub fn get_collection_name<T>() -> String {
@@ -99,6 +99,15 @@ pub async fn delete_all_docs<T>(mongo: Database) -> Result<u64> {
 
     match typed_collection.delete_many(doc! {}, None).await {
         Ok(result) => Ok(result.deleted_count),
+        Err(err) => Err(Error::from(err)),
+    }
+}
+
+pub async fn count_docs<T>(mongo: Database) -> Result<u64> {
+    let typed_collection = mongo.collection::<T>(&*get_collection_name::<T>());
+
+    match typed_collection.count_documents(None, None).await {
+        Ok(count) => Ok(count),
         Err(err) => Err(Error::from(err)),
     }
 }

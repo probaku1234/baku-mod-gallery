@@ -179,8 +179,6 @@ mod tests {
         let result = insert_one_doc::<SyncJob>(test_db, SyncJob::new()).await;
 
         assert!(result.is_ok());
-
-        let inserted_id = result.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]

@@ -322,7 +322,6 @@ mod tests {
         get_db_connection_uri, get_mongo_image, insert_test_post, populate_test_data,
     };
     use mongodb::Client;
-    use serde_json::to_string;
     use testcontainers::clients;
 
     async fn before_all() {

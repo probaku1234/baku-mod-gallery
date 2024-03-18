@@ -315,8 +315,8 @@ async fn insert_posts(
 mod tests {
     use super::*;
     use crate::test_util::test_util::{
-        count_all_posts, create_test_state, find_post_by_id, generate_port_number,
-        get_db_connection_uri, get_mongo_image, insert_test_post, populate_test_data,
+        generate_port_number,
+        get_db_connection_uri, get_mongo_image, populate_test_data,
     };
     use futures::TryStreamExt;
     use mongodb::Client;
@@ -359,5 +359,18 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
+
+        save_sync_result(test_db.clone(), "test message".to_string(), 30, Utc::now().time()).await;
+
+        let typed_collection = test_db.collection::<SyncResult>("SyncResult");
+        let x = typed_collection.find(None, None).await.unwrap();
+
+        let sync_results: Vec<SyncResult> = x.try_collect().await.unwrap();
+
+        assert_eq!(sync_results.len(), 1);
+        let sync_result = sync_results.get(0).unwrap();
+
+        assert_eq!(sync_result.is_success, false);
+        assert_eq!(sync_result.sync_count, 30);
     }
 }

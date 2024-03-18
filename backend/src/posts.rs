@@ -79,21 +79,8 @@ pub struct EditPostRequest {
 pub async fn get_all_posts(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<Post>>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("Post");
-
-    // let filter = doc! {};
-    // let find_option = FindOptions::builder().build();
-
-    match typed_collection.find(None, None).await {
-        Ok(cursor) => {
-            // let posts = cursor.try_collect().await.unwrap_or_else(|_| vec![]);
-            let posts = cursor.try_collect().await.unwrap_or_else(|err| {
-                error!("{}", err.to_string());
-                vec![]
-            });
-
-            Ok(Json(posts))
-        }
+    match get_all_docs::<Post>(state.mongo).await {
+        Ok(posts) => Ok(Json(posts)),
         Err(err) => {
             let error_message = err.to_string();
             error!("{}", error_message.clone());
@@ -106,8 +93,6 @@ pub async fn get_post_by_id(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Post>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("Post");
-
     let target_post_object_id_result = ObjectId::from_str(&id);
 
     if target_post_object_id_result.is_err() {
@@ -121,7 +106,7 @@ pub async fn get_post_by_id(
         "_id": target_post_object_id_result.unwrap()
     };
 
-    match typed_collection.find_one(filter, None).await {
+    match find_one_doc::<Post>(state.mongo, filter).await {
         Ok(result) => match result {
             Some(post) => Ok(Json(post)),
             None => {
@@ -145,8 +130,6 @@ pub async fn create_new_post(
     State(state): State<AppState>,
     Json(req): Json<NewPostRequest>,
 ) -> Result<Json<Bson>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("Post");
-
     let new_post = Post {
         _id: ObjectId::new().to_hex(),
         patreon_post_id: "".to_string(),
@@ -160,11 +143,11 @@ pub async fn create_new_post(
         synced_at: DateTime::now(),
     };
 
-    match typed_collection.insert_one(new_post, None).await {
-        Ok(result) => {
-            let x = result.inserted_id.as_object_id().unwrap();
-            info!("New Post Created {}", x.to_hex());
-            Ok(Json(result.inserted_id))
+    match insert_one_doc::<Post>(state.mongo, new_post).await {
+        Ok(inserted_id) => {
+            let object_id = inserted_id.as_object_id().unwrap();
+            info!("New Post Created {}", object_id.to_hex());
+            Ok(Json(inserted_id))
         }
         Err(err) => {
             let error_message = err.to_string();
@@ -179,8 +162,6 @@ pub async fn edit_post(
     Path(id): Path<String>,
     Json(req): Json<EditPostRequest>,
 ) -> Result<Json<Post>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("Post");
-
     let target_post_object_id_result = ObjectId::from_str(&id);
 
     if target_post_object_id_result.is_err() {
@@ -202,10 +183,7 @@ pub async fn edit_post(
         },
     };
 
-    match typed_collection
-        .find_one_and_update(filter, update, None)
-        .await
-    {
+    match edit_one_doc::<Post>(state.mongo, filter, update).await {
         Ok(result) => match result {
             Some(post) => {
                 info!("Post {} edited", post._id);
@@ -232,8 +210,6 @@ pub async fn delete_post(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("Post");
-
     let target_post_object_id_result = ObjectId::from_str(&id);
 
     if target_post_object_id_result.is_err() {
@@ -247,7 +223,7 @@ pub async fn delete_post(
         "_id": target_post_object_id_result.unwrap()
     };
 
-    match typed_collection.find_one_and_delete(filter, None).await {
+    match delete_one_doc::<Post>(state.mongo, filter).await {
         Ok(result) => match result {
             Some(_) => Ok(StatusCode::OK),
             None => {
@@ -270,11 +246,9 @@ pub async fn delete_post(
 pub async fn delete_all_posts(
     State(state): State<AppState>,
 ) -> Result<StatusCode, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("Post");
-
-    match typed_collection.delete_many(doc! {}, None).await {
-        Ok(result) => {
-            info!("{} posts deleted", result.deleted_count);
+    match delete_all_docs::<Post>(state.mongo).await {
+        Ok(deleted_count) => {
+            info!("{} posts deleted", deleted_count);
             Ok(StatusCode::OK)
         }
         Err(err) => {
@@ -308,6 +282,9 @@ pub async fn sync_posts(State(state): State<AppState>) -> StatusCode {
     StatusCode::OK
 }
 
+use crate::dao::{
+    delete_all_docs, delete_one_doc, edit_one_doc, find_one_doc, get_all_docs, insert_one_doc,
+};
 use crate::sync_job::count_running_sync_job;
 use crate::util::get_chrono_dt_from_string;
 #[cfg(test)]

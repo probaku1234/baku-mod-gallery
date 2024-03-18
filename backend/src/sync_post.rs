@@ -315,8 +315,7 @@ async fn insert_posts(
 mod tests {
     use super::*;
     use crate::test_util::test_util::{
-        generate_port_number,
-        get_db_connection_uri, get_mongo_image, populate_test_data,
+        generate_port_number, get_db_connection_uri, get_mongo_image, populate_test_data,
     };
     use futures::TryStreamExt;
     use mongodb::Client;
@@ -360,7 +359,13 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        save_sync_result(test_db.clone(), "test message".to_string(), 30, Utc::now().time()).await;
+        save_sync_result(
+            test_db.clone(),
+            "test message".to_string(),
+            30,
+            Utc::now().time(),
+        )
+        .await;
 
         let typed_collection = test_db.collection::<SyncResult>("SyncResult");
         let x = typed_collection.find(None, None).await.unwrap();

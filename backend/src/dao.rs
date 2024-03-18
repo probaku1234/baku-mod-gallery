@@ -103,8 +103,8 @@ where
 }
 
 pub async fn delete_one_doc<T>(mongo: Database, filter: Document) -> Result<Option<T>>
-    where
-        T: serde::de::DeserializeOwned,
+where
+    T: serde::de::DeserializeOwned,
 {
     let typed_collection = mongo.collection::<T>(&*get_collection_name::<T>());
 
@@ -129,7 +129,10 @@ pub async fn delete_all_docs<T>(mongo: Database) -> Result<u64> {
 
 #[cfg(test)]
 mod tests {
-    use crate::dao::{delete_all_docs, delete_one_doc, edit_one_doc, find_one_doc, get_all_docs, get_collection_name, insert_one_doc};
+    use crate::dao::{
+        delete_all_docs, delete_one_doc, edit_one_doc, find_one_doc, get_all_docs,
+        get_collection_name, insert_one_doc,
+    };
     use crate::posts::Post;
     use crate::sync_job::SyncJob;
     use crate::sync_post::SyncResult;
@@ -267,7 +270,7 @@ mod tests {
             test_db.clone(),
             Post::new_for_sync("asdf", "asdf", "asdf", "asdf"),
         )
-            .await;
+        .await;
 
         let inserted_id = insert_result.unwrap();
 

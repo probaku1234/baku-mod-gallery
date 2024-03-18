@@ -31,11 +31,7 @@ where
 
             Ok(docs)
         }
-        Err(err) => {
-            let error_message = err.to_string();
-            error!("{}", error_message.clone());
-            Err(Error::from(err))
-        }
+        Err(err) => Err(Error::from(err)),
     }
 }
 
@@ -46,16 +42,8 @@ where
     let typed_collection = mongo.collection::<T>(&*get_collection_name::<T>());
 
     match typed_collection.insert_one(new_doc, None).await {
-        Ok(result) => {
-            let object_id = result.inserted_id.as_object_id().unwrap();
-            info!("New Doc Created {}", object_id.to_hex());
-            Ok(result.inserted_id)
-        }
-        Err(err) => {
-            let error_message = err.to_string();
-            error!("{}", error_message.clone());
-            Err(Error::from(err))
-        }
+        Ok(result) => Ok(result.inserted_id),
+        Err(err) => Err(Error::from(err)),
     }
 }
 
@@ -67,11 +55,7 @@ where
 
     match typed_collection.find_one(filter, None).await {
         Ok(result) => Ok(result),
-        Err(err) => {
-            let error_message = err.to_string();
-            error!("{}", error_message.clone());
-            Err(Error::from(err))
-        }
+        Err(err) => Err(Error::from(err)),
     }
 }
 
@@ -94,11 +78,7 @@ where
         .await
     {
         Ok(result) => Ok(result),
-        Err(err) => {
-            let error_message = err.to_string();
-            error!("{}", error_message.clone());
-            Err(Error::from(err))
-        }
+        Err(err) => Err(Error::from(err)),
     }
 }
 
@@ -110,11 +90,7 @@ where
 
     match typed_collection.find_one_and_delete(filter, None).await {
         Ok(result) => Ok(result),
-        Err(err) => {
-            let error_message = err.to_string();
-            error!("{}", error_message.clone());
-            Err(Error::from(err))
-        }
+        Err(err) => Err(Error::from(err)),
     }
 }
 

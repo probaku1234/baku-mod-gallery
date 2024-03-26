@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{error, info};
+use crate::dao::insert_one_doc;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct SyncResult {
@@ -181,7 +182,6 @@ async fn save_sync_result(
 ) {
     let end_time = Utc::now().time();
     let elapsed_time = (end_time - start_time).num_milliseconds();
-    let typed_collection = mongo.collection::<SyncResult>("SyncResult");
     let is_success = if message.is_empty() { true } else { false };
     let new_sync_result = SyncResult {
         _id: ObjectId::new().to_hex(),
@@ -192,10 +192,9 @@ async fn save_sync_result(
         synced_at: DateTime::now(),
     };
 
-    match typed_collection.insert_one(new_sync_result, None).await {
-        Ok(result) => {
-            let x = result.inserted_id.as_object_id().unwrap();
-            info!("New sync result created {}", x.to_hex());
+    match insert_one_doc::<SyncResult>(mongo, new_sync_result).await {
+        Ok(inserted_id) => {
+            info!("New sync result created {}", inserted_id.as_object_id().unwrap().to_hex());
         }
         Err(err) => {
             error!("{}", err.to_string());

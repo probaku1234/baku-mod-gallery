@@ -127,15 +127,14 @@ async fn connect_mongo(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_util::test_util::{
-        count_all_posts, create_test_state, find_post_by_id, generate_port_number,
-        generate_test_jwt_token, get_db_connection_uri, get_mongo_image, populate_test_data,
-    };
+    use crate::test_util::test_util::{count_all_posts, create_test_state, find_post_by_id, generate_port_number, generate_test_jwt_token, get_db_connection_uri, get_mongo_image, insert_test_post, populate_test_data};
     use ::axum_test::TestServer;
     use axum::http::{HeaderName, HeaderValue};
     use mongodb::{bson::Bson, Client};
+    use mongodb::bson::to_document;
     use serde_json::json;
     use testcontainers::clients;
+    use crate::posts::Post;
 
     #[tokio::test]
     async fn test_hello_world() {
@@ -233,7 +232,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_post_by_id() {
-        // FIXME: figure out how to do this
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
@@ -242,27 +240,42 @@ mod tests {
         let client = Client::with_uri_str(uri).await.unwrap();
 
         let test_db = client.database("test_db");
-        let state = create_test_state(test_db);
+        let state = create_test_state(test_db.clone());
         let app = app(state);
 
-        // let new_post_title = "aa".to_string();
-        // let new_post_images_url: Vec<String> = vec![];
-        // let new_post_file_url = "aa".to_string();
+        let new_post_title = "aa".to_string();
+        let new_post_images_url: Vec<String> = vec![];
+        let new_post_file_url = "aa".to_string();
 
-        // let data = r#"
-        //     {
-        //         "title": "test title",
-        //         "images_url": [],
-        //         "file_url": "test url",
-        //         "created_at": 1705937213517,
-        //         "updated_at": 1705937213517
-        //     }
-        // "#;
-        // let new_post: Post = serde_json::from_str(data).unwrap();
-        // let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
+        let data = r#"
+            {
+                "_id": "659e79f831f22dc0395699b2",
+                "patreon_post_id": "123123",
+                "title": "test title",
+                "content": "qweqwe",
+                "images_url": [],
+                "file_url": "test url",
+                "mod_type": "qweqwe",
+                "created_at": "2024-01-23T13:48:06.761Z",
+                "updated_at": "2024-01-23T13:48:06.761Z",
+                "synced_at": "2024-01-23T13:48:06.761Z"
+            }
+        "#;
+        let new_post: Post = serde_json::from_str(data).unwrap();
+        let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
 
-        // let response_post = response.json::<Post>();
-        // assert_eq!(res)
+        let server = TestServer::new(app).unwrap();
+
+        let response = server
+            .post(format!("/api/posts/{}", inserted_post_object_id.to_hex()).as_str())
+            .await;
+
+        response.assert_status_ok();
+
+        let response_post = response.json::<Post>();
+        let post_doc = to_document(&response_post).unwrap();
+        assert_eq!(post_doc.get_str("patreon_post_id").unwrap(), "123123");
+        assert_eq!(post_doc.get_str("title").unwrap(), "test title");
     }
 
     #[tokio::test]

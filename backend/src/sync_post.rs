@@ -377,4 +377,29 @@ mod tests {
         assert_eq!(sync_result.is_success, false);
         assert_eq!(sync_result.sync_count, 30);
     }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_sync_post_fail_with_invalid_token() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+
+        sync_post(test_db.clone(), "".to_string()).await;
+
+        let typed_collection = test_db.collection::<SyncResult>("SyncResult");
+        let x = typed_collection.find(None, None).await.unwrap();
+
+        let sync_results: Vec<SyncResult> = x.try_collect().await.unwrap();
+
+        assert_eq!(sync_results.len(), 1);
+        let sync_result = sync_results.get(0).unwrap();
+
+        assert_eq!(sync_result.is_success, false);
+    }
 }

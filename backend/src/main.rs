@@ -243,10 +243,6 @@ mod tests {
         let state = create_test_state(test_db.clone());
         let app = app(state);
 
-        let new_post_title = "aa".to_string();
-        let new_post_images_url: Vec<String> = vec![];
-        let new_post_file_url = "aa".to_string();
-
         let data = r#"
             {
                 "_id": "659e79f831f22dc0395699b2",

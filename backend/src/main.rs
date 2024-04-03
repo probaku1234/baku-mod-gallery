@@ -15,6 +15,7 @@ use crate::errors::SetupError;
 use anyhow::Error;
 use mongodb::{options::ClientOptions, Client, Database};
 use router::create_api_router;
+use shuttle_runtime::SecretStore;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -27,7 +28,8 @@ pub struct AppState {
 
 #[shuttle_runtime::main]
 async fn main(
-    #[shuttle_secrets::Secrets] secret_store: shuttle_secrets::SecretStore,
+    #[shuttle_shared_db::MongoDb] _mongo: Database,
+    #[shuttle_runtime::Secrets] secret_store: SecretStore,
 ) -> shuttle_axum::ShuttleAxum {
     //TODO: handle db connection error
     let (
@@ -61,7 +63,7 @@ fn app(state: AppState) -> Router {
 }
 
 fn grab_secrets(
-    secrets: shuttle_secrets::SecretStore,
+    secrets: SecretStore,
 ) -> (String, String, String, String, String, String, String) {
     let jwt_key = secrets
         .get("JWT_SECRET")

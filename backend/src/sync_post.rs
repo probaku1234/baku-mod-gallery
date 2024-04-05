@@ -318,7 +318,7 @@ mod tests {
     };
     use futures::TryStreamExt;
     use mongodb::Client;
-    use testcontainers::clients;
+    use testcontainers_modules::testcontainers::clients;
 
     #[tokio::test]
     async fn test_save_sync_result_success() {

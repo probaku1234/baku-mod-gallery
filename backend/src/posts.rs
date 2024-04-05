@@ -293,12 +293,12 @@ use test_env_helpers::*;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_util::test_util::{
-        count_all_posts, create_test_state, find_post_by_id, generate_port_number,
-        get_db_connection_uri, get_mongo_image, insert_test_post, populate_test_data,
-    };
+    use crate::test_util::test_util::{count_all_posts, create_test_state, find_post_by_id, generate_port_number, get_db_connection_uri, get_mongo_image, get_redis_connection_uri, get_redis_image, insert_test_post, populate_test_data};
     use mongodb::Client;
-    use testcontainers::clients;
+    use testcontainers_modules::{
+        redis::REDIS_PORT,
+        testcontainers::clients
+    };
 
     async fn before_all() {
         // let docker = clients::Cli::default();
@@ -312,14 +312,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
         populate_test_data(&port);
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
-
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
+        
         let test_db = client.database("test_db");
-
-        let state = create_test_state(test_db);
+        
+        let state = create_test_state(test_db, redis_client);
 
         let result = get_all_posts(State(state)).await;
 
@@ -336,14 +340,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
         populate_test_data(&port);
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db);
+        let state = create_test_state(test_db, redis_client);
 
         let result = get_post_by_id(State(state), Path("aaaa".to_string())).await;
 
@@ -359,13 +367,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
-        let uri = get_db_connection_uri(&port);
-        let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_node = docker.run(redis_img);
 
+        let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
+        let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
+        
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db.clone());
+        let state = create_test_state(test_db.clone(), redis_client);
 
         let new_post_title = "aa".to_string();
         let new_post_content = "content".to_string();
@@ -386,7 +399,7 @@ mod tests {
             synced_at: DateTime::now(),
         };
 
-        let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
+        let inserted_post_object_id = insert_test_post(test_db, new_post).await;
         let object_id_string = inserted_post_object_id.to_hex();
 
         let result = get_post_by_id(State(state), Path(object_id_string)).await;
@@ -405,13 +418,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
+
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db.clone());
+        let state = create_test_state(test_db.clone(), redis_client);
 
         let new_post_title = "aa".to_string();
         let new_post_content = "content".to_string();
@@ -443,13 +461,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
+
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db.clone());
+        let state = create_test_state(test_db.clone(), redis_client);
 
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
@@ -503,13 +526,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
+
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db.clone());
+        let state = create_test_state(test_db.clone(), redis_client);
 
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
@@ -540,14 +568,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
-        populate_test_data(&port);
+        let redis_node = docker.run(redis_img);
+
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db.clone());
+        let state = create_test_state(test_db.clone(), redis_client);
 
         let result = delete_all_posts(State(state)).await;
 

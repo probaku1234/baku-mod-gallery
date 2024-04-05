@@ -1,13 +1,13 @@
 #[cfg(test)]
 pub mod test_util {
     use jsonwebtoken::{encode, EncodingKey, Header};
-    use mongodb::{
-        bson::{doc, oid::ObjectId},
-        Database,
-    };
+    use mongodb::{bson::{doc, oid::ObjectId}, Database};
     use run_script::run_script;
     use std::net::UdpSocket;
-    use testcontainers::{GenericImage, RunnableImage};
+    use testcontainers_modules::{
+        redis::Redis,
+        testcontainers::{GenericImage, RunnableImage}
+    };
 
     use crate::{jwt_auth::TokenClaims, posts::Post, AppState};
 
@@ -21,6 +21,10 @@ pub mod test_util {
     pub fn get_mongo_image(&port: &u16) -> RunnableImage<GenericImage> {
         let image = GenericImage::new("mongo".to_string(), "5.0.6".to_string());
         RunnableImage::from(image).with_mapped_port((port, 27017))
+    }
+    
+    pub fn get_redis_image() -> RunnableImage<Redis> {
+        RunnableImage::from(Redis::default())
     }
 
     pub fn populate_test_data(&port: &u16) {
@@ -38,6 +42,10 @@ pub mod test_util {
         format!("mongodb://{}:{}", "0.0.0.0", port)
     }
 
+    pub fn get_redis_connection_uri(&port: &u16) -> String {
+        format!("redis://127.0.0.1:{port}")
+    }
+    
     pub async fn insert_test_post(db: Database, new_post: Post) -> ObjectId {
         let typed_collection = db.collection::<Post>("Post");
 
@@ -60,9 +68,10 @@ pub mod test_util {
         find_result.unwrap()
     }
 
-    pub fn create_test_state(mongo: mongodb::Database) -> AppState {
+    pub fn create_test_state(mongo: mongodb::Database, redis: redis::Client) -> AppState {
         AppState {
             mongo,
+            redis,
             jwt_key: "test_jwt_key".to_string(),
             server_domain: "http://localhost:8000".to_string(),
             client_domain: "http://localhost:3000".to_string(),

@@ -5,6 +5,7 @@ mod dao;
 mod errors;
 mod jwt_auth;
 mod posts;
+mod redis_pubsub;
 mod router;
 mod sync_job;
 mod sync_post;
@@ -14,7 +15,6 @@ mod util;
 use crate::errors::SetupError;
 use anyhow::Error;
 use mongodb::{options::ClientOptions, Client, Database};
-use redis::Commands;
 use router::create_api_router;
 use shuttle_runtime::SecretStore;
 
@@ -47,7 +47,13 @@ async fn main(
 
     let db = connect_mongo(mongo_id, mongo_password, db_name).await?;
     let redis = connect_redis(redis_connection_string)?;
-    
+
+    let _ =
+        redis_pubsub::pubsub::subscribe(db.clone(), redis.clone(), patreon_access_token.clone())
+            .unwrap();
+
+    // redis_pubsub::pubsub::publish_message(redis.clone(), redis_pubsub::message::Message::new());
+
     let state = AppState {
         mongo: db,
         redis,
@@ -56,7 +62,7 @@ async fn main(
         client_domain,
         patreon_access_token,
     };
-    
+
     Ok(app(state).into())
 }
 
@@ -67,7 +73,18 @@ fn app(state: AppState) -> Router {
     Router::new().nest("/api", api_router)
 }
 
-fn grab_secrets(secrets: SecretStore) -> (String, String, String, String, String, String, String, String) {
+fn grab_secrets(
+    secrets: SecretStore,
+) -> (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+) {
     let jwt_key = secrets
         .get("JWT_SECRET")
         .unwrap_or_else(|| "None".to_string());
@@ -136,7 +153,7 @@ async fn connect_mongo(
 
 fn connect_redis(connection_string: String) -> anyhow::Result<redis::Client> {
     let client = redis::Client::open(connection_string.to_string())?;
-    
+
     Ok(client)
 }
 
@@ -144,16 +161,17 @@ fn connect_redis(connection_string: String) -> anyhow::Result<redis::Client> {
 mod tests {
     use super::*;
     use crate::posts::Post;
-    use crate::test_util::test_util::{count_all_posts, create_test_state, find_post_by_id, generate_port_number, generate_test_jwt_token, get_db_connection_uri, get_mongo_image, get_redis_connection_uri, get_redis_image, insert_test_post, populate_test_data};
+    use crate::test_util::test_util::{
+        count_all_posts, create_test_state, find_post_by_id, generate_port_number,
+        generate_test_jwt_token, get_db_connection_uri, get_mongo_image, get_redis_connection_uri,
+        get_redis_image, insert_test_post, populate_test_data,
+    };
     use ::axum_test::TestServer;
     use axum::http::{HeaderName, HeaderValue};
     use mongodb::bson::to_document;
     use mongodb::{bson::Bson, Client};
     use serde_json::json;
-    use testcontainers_modules::{
-        redis::REDIS_PORT,
-        testcontainers::clients
-    };
+    use testcontainers_modules::{redis::REDIS_PORT, testcontainers::clients};
 
     #[tokio::test]
     async fn test_hello_world() {

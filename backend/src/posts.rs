@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use std::vec;
 
-use crate::sync_post::sync_post;
+// use crate::sync_post::sync_post;
 use crate::AppState;
 use axum::response::IntoResponse;
 use axum::{
@@ -260,6 +260,7 @@ pub async fn delete_all_posts(
 
 pub async fn sync_posts(State(state): State<AppState>) -> StatusCode {
     let x = state.mongo.clone();
+    let redis = state.redis.clone();
 
     let count_job_result = count_running_sync_job(x.clone()).await;
 
@@ -274,9 +275,14 @@ pub async fn sync_posts(State(state): State<AppState>) -> StatusCode {
         return StatusCode::OK;
     }
 
-    tokio::spawn(async move {
-        sync_post(x, state.patreon_access_token).await;
-    });
+    // tokio::spawn(async move {
+    //     sync_post(x, state.patreon_access_token).await;
+    // });
+    let publish_result = publish_message(redis, Message::new(String::from("Sync")));
+
+    if publish_result.is_err() {
+        error!("Failed to publish message: {}", publish_result.unwrap_err());
+    }
 
     StatusCode::OK
 }
@@ -284,6 +290,8 @@ pub async fn sync_posts(State(state): State<AppState>) -> StatusCode {
 use crate::dao::{
     delete_all_docs, delete_one_doc, edit_one_doc, find_one_doc, get_all_docs, insert_one_doc,
 };
+use crate::redis_pubsub::message::Message;
+use crate::redis_pubsub::pubsub::publish_message;
 use crate::sync_job::count_running_sync_job;
 use crate::util::get_chrono_dt_from_string;
 #[cfg(test)]
@@ -293,12 +301,13 @@ use test_env_helpers::*;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_util::test_util::{count_all_posts, create_test_state, find_post_by_id, generate_port_number, get_db_connection_uri, get_mongo_image, get_redis_connection_uri, get_redis_image, insert_test_post, populate_test_data};
-    use mongodb::Client;
-    use testcontainers_modules::{
-        redis::REDIS_PORT,
-        testcontainers::clients
+    use crate::test_util::test_util::{
+        count_all_posts, create_test_state, find_post_by_id, generate_port_number,
+        get_db_connection_uri, get_mongo_image, get_redis_connection_uri, get_redis_image,
+        insert_test_post, populate_test_data,
     };
+    use mongodb::Client;
+    use testcontainers_modules::{redis::REDIS_PORT, testcontainers::clients};
 
     async fn before_all() {
         // let docker = clients::Cli::default();
@@ -320,9 +329,9 @@ mod tests {
         let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
         let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
-        
+
         let test_db = client.database("test_db");
-        
+
         let state = create_test_state(test_db, redis_client);
 
         let result = get_all_posts(State(state)).await;
@@ -375,7 +384,7 @@ mod tests {
         let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
         let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
-        
+
         let test_db = client.database("test_db");
 
         let state = create_test_state(test_db.clone(), redis_client);

@@ -1,3 +1,4 @@
+use crate::dao::insert_one_doc;
 use crate::posts::Post;
 use crate::sync_job::{create_sync_job, delete_sync_job};
 use crate::util::convert_to_rfc3999_string;
@@ -10,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{error, info};
-use crate::dao::insert_one_doc;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct SyncResult {
@@ -194,7 +194,10 @@ async fn save_sync_result(
 
     match insert_one_doc::<SyncResult>(mongo, new_sync_result).await {
         Ok(inserted_id) => {
-            info!("New sync result created {}", inserted_id.as_object_id().unwrap().to_hex());
+            info!(
+                "New sync result created {}",
+                inserted_id.as_object_id().unwrap().to_hex()
+            );
         }
         Err(err) => {
             error!("{}", err.to_string());

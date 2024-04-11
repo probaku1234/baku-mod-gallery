@@ -126,7 +126,7 @@ mod tests {
     };
     use mongodb::bson::{doc, to_document};
     use mongodb::Client;
-    use testcontainers::clients;
+    use testcontainers_modules::testcontainers::clients;
 
     #[test]
     fn test_get_collection_name() {

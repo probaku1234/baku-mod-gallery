@@ -74,7 +74,7 @@ mod tests {
         generate_port_number, get_db_connection_uri, get_mongo_image,
     };
     use mongodb::Client;
-    use testcontainers::clients;
+    use testcontainers_modules::testcontainers::clients;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_create_sync_job() {

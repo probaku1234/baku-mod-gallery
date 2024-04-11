@@ -1,3 +1,4 @@
+use crate::dao::insert_one_doc;
 use crate::posts::Post;
 use crate::sync_job::{create_sync_job, delete_sync_job};
 use crate::util::convert_to_rfc3999_string;
@@ -10,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{error, info};
-use crate::dao::insert_one_doc;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct SyncResult {
@@ -194,7 +194,10 @@ async fn save_sync_result(
 
     match insert_one_doc::<SyncResult>(mongo, new_sync_result).await {
         Ok(inserted_id) => {
-            info!("New sync result created {}", inserted_id.as_object_id().unwrap().to_hex());
+            info!(
+                "New sync result created {}",
+                inserted_id.as_object_id().unwrap().to_hex()
+            );
         }
         Err(err) => {
             error!("{}", err.to_string());
@@ -318,7 +321,7 @@ mod tests {
     };
     use futures::TryStreamExt;
     use mongodb::Client;
-    use testcontainers::clients;
+    use testcontainers_modules::testcontainers::clients;
 
     #[tokio::test]
     async fn test_save_sync_result_success() {
@@ -376,5 +379,30 @@ mod tests {
 
         assert_eq!(sync_result.is_success, false);
         assert_eq!(sync_result.sync_count, 30);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_sync_post_fail_with_invalid_token() {
+        let docker = clients::Cli::default();
+        let port = generate_port_number();
+        let mongo_img = get_mongo_image(&port);
+        let _c = docker.run(mongo_img);
+
+        let uri = get_db_connection_uri(&port);
+        let client = Client::with_uri_str(uri).await.unwrap();
+
+        let test_db = client.database("test_db");
+
+        sync_post(test_db.clone(), "".to_string()).await;
+
+        let typed_collection = test_db.collection::<SyncResult>("SyncResult");
+        let x = typed_collection.find(None, None).await.unwrap();
+
+        let sync_results: Vec<SyncResult> = x.try_collect().await.unwrap();
+
+        assert_eq!(sync_results.len(), 1);
+        let sync_result = sync_results.get(0).unwrap();
+
+        assert_eq!(sync_result.is_success, false);
     }
 }

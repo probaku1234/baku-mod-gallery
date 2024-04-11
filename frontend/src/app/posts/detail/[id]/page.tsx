@@ -3,9 +3,7 @@ export default async function Page({ params }: { params: { id: string } }) {
 
   const { data } = await res.json();
   let post = data as IPost;
-  console.log(post);
 
-  // console.log(data.body as IPost);
   return (
     <div>
       My Post: {params.id} {data.created_at}

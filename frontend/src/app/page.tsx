@@ -1,95 +1,94 @@
-import Image from "next/image";
+"use client"
+
 import styles from "./page.module.css";
+import { Suspense } from "react";
+import { PostsFeed } from "./components/PostsFeed";
+import Loading from "./loading";
+import {
+  Navbar,
+  NavbarBrand,
+  NavbarCollapse,
+  NavbarLink,
+  NavbarToggle,
+  Label,
+  TextInput,
+} from "flowbite-react";
+import Link from "next/link";
+import Image from "next/image";
 
 export default function Home() {
   return (
     <main className={styles.main}>
-      <div className={styles.description}>
-        <p>
-          Get started by editing&nbsp;
-          <code className={styles.code}>src/app/page.tsx</code>
-        </p>
-        <div>
-          <a
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className={styles.vercelLogo}
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
-
-      <div className={styles.center}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className={styles.grid}>
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Docs <span>-&gt;</span>
-          </h2>
-          <p>Find in-depth information about Next.js features and API.</p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Learn <span>-&gt;</span>
-          </h2>
-          <p>Learn about Next.js in an interactive course with&nbsp;quizzes!</p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Templates <span>-&gt;</span>
-          </h2>
-          <p>Explore starter templates for Next.js.</p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Deploy <span>-&gt;</span>
-          </h2>
-          <p>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
+      <Navbar fluid rounded className="w-full">
+        {/* <NavbarBrand as={Link} href="https://flowbite-react.com">
+          <Image
+            src="/vercel.svg"
+            width={400}
+            height={400}
+            className="mr-3 h-6 sm:h-9"
+            alt="Flowbite React Logo"
+          />
+          <span className="self-center whitespace-nowrap text-xl font-semibold dark:text-white">
+            Flowbite React
+          </span>
+        </NavbarBrand> */}
+        <NavbarCollapse>
+          {/* <NavbarLink href="#" active >
+            Home
+          </NavbarLink>
+          <NavbarLink as={Link} href="#">
+            About
+          </NavbarLink>
+          <NavbarLink href="#">Services</NavbarLink>
+          <NavbarLink href="#">Pricing</NavbarLink>
+          <NavbarLink href="#">Contact</NavbarLink> */}
+        </NavbarCollapse>
+        <NavbarToggle />
+        <NavbarCollapse>
+          <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
+            <div className="bg-white dark:bg-gray-900">
+              <Label htmlFor="table-search" className="sr-only">
+                Search
+              </Label>
+              <div className="relative">
+                <div className="absolute inset-y-0 rtl:inset-r-0 start-0 flex items-center ps-3 pointer-events-none">
+                  <svg
+                    className="w-4 h-4 text-gray-500 dark:text-gray-400"
+                    aria-hidden="true"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"
+                    />
+                  </svg>
+                </div>
+                <TextInput
+                  type="text"
+                  id="table-search"
+                  className="block ps-10 text-sm text-gray-900 rounded-lg w-80 bg-gray-50 dark:bg-gray-700 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 border-transparent"
+                  placeholder="Search for items"
+                  // onChange={(e) => {
+                  //   setSearchKeyword(e.target.value);
+                  //   onFilterPosts(e.target.value);
+                  // }}
+                  // value={searchKeyword}
+                />
+              </div>
+            </div>
+          </div>
+        </NavbarCollapse>
+      </Navbar>
+      <section>
+        <Suspense fallback={<Loading />}>
+          <PostsFeed />
+        </Suspense>
+      </section>
     </main>
   );
 }

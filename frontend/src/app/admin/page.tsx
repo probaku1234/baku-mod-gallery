@@ -5,8 +5,6 @@ import { authOptions } from "../util/auth";
 import PostTable from "../components/PostTable";
 
 export default async function Page() {
-  const session = await getServerSession(authOptions);
-
   const res = await fetch(`${process.env.FRONT_HOST!}/posts`);
 
   const { data } = await res.json();

@@ -17,7 +17,7 @@ use anyhow::Error;
 use mongodb::{options::ClientOptions, Client, Database};
 use router::create_api_router;
 use shuttle_runtime::SecretStore;
-use tracing::{error, debug};
+use tracing::{debug, error};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -61,7 +61,7 @@ async fn main(
     };
 
     if let Err(error) = redis_pubsub::pubsub::subscribe(state.clone()) {
-        error!("failed to subscribe channel {}",error);
+        error!("failed to subscribe channel {}", error);
     } else {
         debug!("subscribe channel");
     }

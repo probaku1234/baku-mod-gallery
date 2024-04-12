@@ -16,9 +16,7 @@ pub fn publish_message(redis: redis::Client, message: Message) -> anyhow::Result
     Ok(num)
 }
 
-pub fn subscribe(
-    state: AppState,
-) -> anyhow::Result<()> {
+pub fn subscribe(state: AppState) -> anyhow::Result<()> {
     // let _ = tokio::spawn(async move {
     //     let mut con = redis.get_connection().unwrap();
     //
@@ -31,9 +29,7 @@ pub fn subscribe(
     //         return ControlFlow::Continue;
     //     }).unwrap();
     // });
-    let mongo = state.mongo;
-    let redis = state.redis;
-    let patreon_access_token = state.patreon_access_token;
+    let redis = state.redis.clone();
 
     // TODO: propagate errors
     tokio::spawn(async move {
@@ -49,7 +45,7 @@ pub fn subscribe(
             debug!("Message received: {:?}", message_obj);
 
             if received.eq("Sync") {
-                sync_post(mongo.clone(), patreon_access_token.clone()).await;
+                sync_post(state.clone()).await;
             }
         }
     });
@@ -61,7 +57,10 @@ pub fn subscribe(
 mod tests {
     use super::*;
     use crate::redis_pubsub::message::Message;
-    use crate::test_util::test_util::{create_test_state, generate_port_number, get_db_connection_uri, get_mongo_image, get_redis_connection_uri, get_redis_image};
+    use crate::test_util::test_util::{
+        create_test_state, generate_port_number, get_db_connection_uri, get_mongo_image,
+        get_redis_connection_uri, get_redis_image,
+    };
     use mongodb::Client;
     use testcontainers_modules::redis::REDIS_PORT;
     use testcontainers_modules::testcontainers::clients;

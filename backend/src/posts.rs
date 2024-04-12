@@ -259,18 +259,16 @@ pub async fn delete_all_posts(
 }
 
 pub async fn sync_posts(State(state): State<AppState>) -> StatusCode {
-    let x = state.mongo.clone();
     let redis = state.redis.clone();
 
-    let count_job_result = count_running_sync_job(x.clone()).await;
-
-    if count_job_result.is_err() {
-        error!("fail to count sync job");
+    let is_running_job_exist_result = check_sync_job_exists(redis.clone());
+    if is_running_job_exist_result.is_err() {
+        error!("fail to check sync job");
         return StatusCode::OK;
     }
-    let running_job_num = count_job_result.unwrap();
 
-    if running_job_num > 0 {
+    let is_running_job_exist = is_running_job_exist_result.unwrap();
+    if is_running_job_exist {
         info!("there is already running job!");
         return StatusCode::OK;
     }
@@ -292,10 +290,10 @@ use crate::dao::{
 };
 use crate::redis_pubsub::message::Message;
 use crate::redis_pubsub::pubsub::publish_message;
-use crate::sync_job::count_running_sync_job;
 use crate::util::get_chrono_dt_from_string;
 #[cfg(test)]
 use test_env_helpers::*;
+use crate::sync_job::check_sync_job_exists;
 
 #[before_all]
 #[cfg(test)]

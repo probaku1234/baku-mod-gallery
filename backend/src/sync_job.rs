@@ -1,154 +1,117 @@
-use crate::dao::{count_docs, delete_one_doc, insert_one_doc};
-use anyhow::{Error, Result};
-use mongodb::bson::oid::ObjectId;
-use mongodb::bson::serde_helpers::{bson_datetime_as_rfc3339_string, hex_string_as_object_id};
-use mongodb::bson::{doc, DateTime};
-use mongodb::Database;
-use serde::{Deserialize, Serialize};
-use std::str::FromStr;
-use tracing::{error, info};
+use anyhow::Result;
+use redis::Commands;
+use uuid::Uuid;
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct SyncJob {
-    #[serde(with = "hex_string_as_object_id")]
-    _id: String,
-    #[serde(with = "bson_datetime_as_rfc3339_string")]
-    started_at: DateTime,
+const JOB_ID_KEY: &str = "job_id";
+
+pub fn create_sync_job(redis: redis::Client) -> Result<()> {
+    let mut con = redis.get_connection()?;
+    con.set(JOB_ID_KEY, Uuid::new_v4().simple().to_string())?;
+
+    Ok(())
 }
 
-impl SyncJob {
-    pub fn new() -> Self {
-        SyncJob {
-            _id: ObjectId::new().to_hex(),
-            started_at: DateTime::now(),
-        }
-    }
+pub fn delete_sync_job(redis: redis::Client) -> Result<i64> {
+    let mut con = redis.get_connection()?;
+    let deleted_key_num: i64 = con.del(JOB_ID_KEY)?;
+
+    Ok(deleted_key_num)
 }
 
-pub async fn create_sync_job(mongo: Database) -> Result<String> {
-    let new_job = SyncJob::new();
+pub fn check_sync_job_exists(redis: redis::Client) -> Result<bool> {
+    let mut con = redis.get_connection()?;
 
-    match insert_one_doc::<SyncJob>(mongo, new_job).await {
-        Ok(inserted_id) => Ok(inserted_id.as_object_id().unwrap().to_hex()),
-        Err(err) => {
-            error!("{}", err.to_string());
-            Err(Error::from(Error::from(err)))
-        }
-    }
-}
+    let job_id: Option<String> = con.get(JOB_ID_KEY)?;
 
-pub async fn delete_sync_job(mongo: Database, object_id: String) -> Result<()> {
-    let filter = doc! {
-        "_id": ObjectId::from_str(&*object_id).unwrap()
-    };
-
-    match delete_one_doc::<SyncJob>(mongo, filter).await {
-        Ok(result) => {
-            match result {
-                Some(job) => {
-                    info!("Job ID {} deleted", job._id);
-                    Ok(())
-                }
-                None => {
-                    // Err(error::Error::from(error::ErrorKind::InvalidArgument { message: "".to_string() }))
-                    Ok(())
-                }
-            }
-        }
-        Err(err) => {
-            error!("{}", err.to_string());
-            Err(Error::from(err))
-        }
-    }
-}
-
-pub async fn count_running_sync_job(mongo: Database) -> Result<u64> {
-    count_docs::<SyncJob>(mongo).await
+    Ok(job_id.is_some())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dao::find_one_doc;
-    use crate::test_util::test_util::{
-        generate_port_number, get_db_connection_uri, get_mongo_image,
-    };
-    use mongodb::Client;
+    use crate::test_util::test_util::{get_redis_connection_uri, get_redis_image};
+    use testcontainers_modules::redis::REDIS_PORT;
     use testcontainers_modules::testcontainers::clients;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_create_sync_job() {
         let docker = clients::Cli::default();
-        let port = generate_port_number();
-        let mongo_img = get_mongo_image(&port);
-        let _c = docker.run(mongo_img);
-        let uri = get_db_connection_uri(&port);
-        let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_img = get_redis_image();
+        let redis_node = docker.run(redis_img);
 
-        let test_db = client.database("test_db");
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
-        let result = create_sync_job(test_db).await;
+        let result = create_sync_job(redis_client);
 
         assert!(result.is_ok());
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_delete_sync_job() {
+    async fn test_delete_sync_job_when_no_job_exist() {
         let docker = clients::Cli::default();
-        let port = generate_port_number();
-        let mongo_img = get_mongo_image(&port);
-        let _c = docker.run(mongo_img);
-        let uri = get_db_connection_uri(&port);
-        let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_img = get_redis_image();
+        let redis_node = docker.run(redis_img);
 
-        let test_db = client.database("test_db");
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
-        let insert_result = create_sync_job(test_db.clone()).await;
-
-        let job_id = insert_result.unwrap();
-
-        let result = delete_sync_job(test_db.clone(), job_id.clone()).await;
+        let result = delete_sync_job(redis_client);
 
         assert!(result.is_ok());
 
-        let filter = doc! {
-            "_id": ObjectId::from_str(&*job_id).unwrap()
-        };
-
-        let find_result = find_one_doc::<SyncJob>(test_db, filter).await;
-
-        assert!(find_result.is_ok());
-
-        assert!(find_result.unwrap().is_none());
+        assert_eq!(result.unwrap(), 0);
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_count_running_sync_job() {
+    async fn test_delete_sync_job_when_job_exist() {
         let docker = clients::Cli::default();
-        let port = generate_port_number();
-        let mongo_img = get_mongo_image(&port);
-        let _c = docker.run(mongo_img);
-        let uri = get_db_connection_uri(&port);
-        let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_img = get_redis_image();
+        let redis_node = docker.run(redis_img);
 
-        let test_db = client.database("test_db");
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
-        create_sync_job(test_db.clone())
-            .await
-            .expect("Fail to create SyncJob");
-        create_sync_job(test_db.clone())
-            .await
-            .expect("Fail to create SyncJob");
-        create_sync_job(test_db.clone())
-            .await
-            .expect("Fail to create SyncJob");
+        let mut con = redis_client.clone().get_connection().unwrap();
+        let _: () = con.set(JOB_ID_KEY, "123123123").unwrap();
 
-        let result = count_running_sync_job(test_db).await;
+        let result = delete_sync_job(redis_client);
 
         assert!(result.is_ok());
 
-        let count = result.unwrap();
+        assert_eq!(result.unwrap(), 1);
+    }
 
-        assert_eq!(count, 3);
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_check_sync_job_exist_when_no_job_exist() {
+        let docker = clients::Cli::default();
+        let redis_img = get_redis_image();
+        let redis_node = docker.run(redis_img);
+
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
+
+        let result = check_sync_job_exists(redis_client);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), false);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_check_sync_job_exist_when_job_exist() {
+        let docker = clients::Cli::default();
+        let redis_img = get_redis_image();
+        let redis_node = docker.run(redis_img);
+
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
+
+        let mut con = redis_client.clone().get_connection().unwrap();
+        let _: () = con.set(JOB_ID_KEY, "123123123").unwrap();
+
+        let result = check_sync_job_exists(redis_client);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), true);
     }
 }

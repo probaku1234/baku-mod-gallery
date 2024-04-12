@@ -103,6 +103,7 @@ pub async fn delete_all_docs<T>(mongo: Database) -> Result<u64> {
     }
 }
 
+#[allow(dead_code)]
 pub async fn count_docs<T>(mongo: Database) -> Result<u64> {
     let typed_collection = mongo.collection::<T>(&*get_collection_name::<T>());
 
@@ -119,7 +120,6 @@ mod tests {
         get_collection_name, insert_one_doc,
     };
     use crate::posts::Post;
-    use crate::sync_job::SyncJob;
     use crate::sync_post::SyncResult;
     use crate::test_util::test_util::{
         generate_port_number, get_db_connection_uri, get_mongo_image, populate_test_data,
@@ -131,7 +131,6 @@ mod tests {
     #[test]
     fn test_get_collection_name() {
         assert_eq!(get_collection_name::<Post>(), "Post");
-        assert_eq!(get_collection_name::<SyncJob>(), "SyncJob");
         assert_eq!(get_collection_name::<SyncResult>(), "SyncResult");
     }
 
@@ -164,7 +163,7 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let result = insert_one_doc::<SyncJob>(test_db, SyncJob::new()).await;
+        let result = insert_one_doc::<SyncResult>(test_db, SyncResult::new()).await;
 
         assert!(result.is_ok());
     }
@@ -180,7 +179,7 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let insert_result = insert_one_doc::<SyncJob>(test_db.clone(), SyncJob::new()).await;
+        let insert_result = insert_one_doc::<SyncResult>(test_db.clone(), SyncResult::new()).await;
 
         let inserted_id = insert_result.unwrap();
 
@@ -188,7 +187,7 @@ mod tests {
             "_id": inserted_id.as_object_id().unwrap()
         };
 
-        let result = find_one_doc::<SyncJob>(test_db, filter).await;
+        let result = find_one_doc::<SyncResult>(test_db, filter).await;
 
         assert!(result.is_ok());
 

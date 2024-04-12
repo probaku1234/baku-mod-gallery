@@ -2,6 +2,7 @@ use crate::dao::insert_one_doc;
 use crate::posts::Post;
 use crate::sync_job::{create_sync_job, delete_sync_job};
 use crate::util::convert_to_rfc3999_string;
+use crate::AppState;
 use chrono::{NaiveTime, Utc};
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::serde_helpers::{bson_datetime_as_rfc3339_string, hex_string_as_object_id};
@@ -74,16 +75,20 @@ pub struct PatreonPost {
     published_at: String,
 }
 
-pub async fn sync_post(mongo: Database, patreon_access_token: String) {
+pub async fn sync_post(state: AppState) {
+    let mongo = state.mongo;
+    let patreon_access_token = state.patreon_access_token;
+    let redis = state.redis;
+
     let start_time = Utc::now().time();
-    let create_job_result = create_sync_job(mongo.clone()).await;
+
+    let create_job_result = create_sync_job(redis.clone());
 
     if create_job_result.is_err() {
         let error = create_job_result.err().unwrap();
         error!("fail to create job {}", error.to_string());
         return;
     }
-    let job_id = create_job_result.unwrap();
 
     let sync_count: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
     let client = reqwest::Client::new();
@@ -167,7 +172,7 @@ pub async fn sync_post(mongo: Database, patreon_access_token: String) {
     )
     .await;
 
-    let delete_job_result = delete_sync_job(mongo, job_id).await;
+    let delete_job_result = delete_sync_job(redis);
     if delete_job_result.is_err() {
         let error = delete_job_result.err().unwrap();
         error!("fail to delete job {}", error.to_string());
@@ -317,11 +322,26 @@ async fn insert_posts(
 mod tests {
     use super::*;
     use crate::test_util::test_util::{
-        generate_port_number, get_db_connection_uri, get_mongo_image, populate_test_data,
+        create_test_state, generate_port_number, get_db_connection_uri, get_mongo_image,
+        get_redis_connection_uri, get_redis_image, populate_test_data,
     };
     use futures::TryStreamExt;
     use mongodb::Client;
+    use testcontainers_modules::redis::REDIS_PORT;
     use testcontainers_modules::testcontainers::clients;
+
+    impl SyncResult {
+        pub fn new() -> Self {
+            SyncResult {
+                _id: ObjectId::new().to_hex(),
+                is_success: true,
+                message: "".to_string(),
+                sync_count: 32,
+                elapsed_time: 444,
+                synced_at: DateTime::now()
+            }
+        }
+    }
 
     #[tokio::test]
     async fn test_save_sync_result_success() {
@@ -386,14 +406,20 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
 
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        sync_post(test_db.clone(), "".to_string()).await;
+        let state = create_test_state(test_db.clone(), redis_client);
+
+        sync_post(state).await;
 
         let typed_collection = test_db.collection::<SyncResult>("SyncResult");
         let x = typed_collection.find(None, None).await.unwrap();

@@ -17,6 +17,7 @@ use anyhow::Error;
 use mongodb::{options::ClientOptions, Client, Database};
 use router::create_api_router;
 use shuttle_runtime::SecretStore;
+use tracing::{error, debug};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -48,10 +49,6 @@ async fn main(
     let db = connect_mongo(mongo_id, mongo_password, db_name).await?;
     let redis = connect_redis(redis_connection_string)?;
 
-    let _ =
-        redis_pubsub::pubsub::subscribe(db.clone(), redis.clone(), patreon_access_token.clone())
-            .unwrap();
-
     // redis_pubsub::pubsub::publish_message(redis.clone(), redis_pubsub::message::Message::new());
 
     let state = AppState {
@@ -62,6 +59,12 @@ async fn main(
         client_domain,
         patreon_access_token,
     };
+
+    if let Err(error) = redis_pubsub::pubsub::subscribe(state.clone()) {
+        error!("failed to subscribe channel {}",error);
+    } else {
+        debug!("subscribe channel");
+    }
 
     Ok(app(state).into())
 }

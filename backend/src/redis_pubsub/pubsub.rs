@@ -1,6 +1,7 @@
 use crate::redis_pubsub::message::Message;
 use crate::redis_pubsub::CHANNEL;
 use crate::sync_post::sync_post;
+use crate::AppState;
 use redis::Commands;
 use tracing::debug;
 
@@ -16,9 +17,7 @@ pub fn publish_message(redis: redis::Client, message: Message) -> anyhow::Result
 }
 
 pub fn subscribe(
-    mongo: mongodb::Database,
-    redis: redis::Client,
-    patreon_access_token: String,
+    state: AppState,
 ) -> anyhow::Result<()> {
     // let _ = tokio::spawn(async move {
     //     let mut con = redis.get_connection().unwrap();
@@ -32,6 +31,9 @@ pub fn subscribe(
     //         return ControlFlow::Continue;
     //     }).unwrap();
     // });
+    let mongo = state.mongo;
+    let redis = state.redis;
+    let patreon_access_token = state.patreon_access_token;
 
     // TODO: propagate errors
     tokio::spawn(async move {
@@ -59,10 +61,7 @@ pub fn subscribe(
 mod tests {
     use super::*;
     use crate::redis_pubsub::message::Message;
-    use crate::test_util::test_util::{
-        generate_port_number, get_db_connection_uri, get_mongo_image, get_redis_connection_uri,
-        get_redis_image,
-    };
+    use crate::test_util::test_util::{create_test_state, generate_port_number, get_db_connection_uri, get_mongo_image, get_redis_connection_uri, get_redis_image};
     use mongodb::Client;
     use testcontainers_modules::redis::REDIS_PORT;
     use testcontainers_modules::testcontainers::clients;
@@ -83,7 +82,7 @@ mod tests {
 
         let test_db = client.database("test_db");
 
-        let result = subscribe(test_db, redis_client, "".to_string());
+        let result = subscribe(create_test_state(test_db, redis_client));
 
         assert!(result.is_ok());
     }

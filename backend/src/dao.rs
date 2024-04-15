@@ -8,7 +8,6 @@ use serde::Serialize;
 use std::any::type_name;
 use tracing::error;
 
-// TODO: error logging??
 pub fn get_collection_name<T>() -> String {
     let type_name = type_name::<T>();
     let splitted_type_name: Vec<_> = type_name.split("::").collect();

@@ -34,7 +34,6 @@ async fn main(
     #[shuttle_shared_db::MongoDb] _mongo: Database,
     #[shuttle_runtime::Secrets] secret_store: SecretStore,
 ) -> shuttle_axum::ShuttleAxum {
-    //TODO: handle db connection error
     let (
         jwt_key,
         server_domain,

@@ -1,6 +1,7 @@
 use std::str::FromStr;
 use std::vec;
 
+// use crate::sync_post::sync_post;
 use crate::AppState;
 use axum::response::IntoResponse;
 use axum::{
@@ -8,20 +9,18 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use futures::stream::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
-use mongodb::bson::serde_helpers::{
-    bson_datetime_as_rfc3339_string, hex_string_as_object_id,
-};
+use mongodb::bson::serde_helpers::{bson_datetime_as_rfc3339_string, hex_string_as_object_id};
 use mongodb::bson::{doc, Bson, DateTime};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Post {
     #[serde(with = "hex_string_as_object_id")]
     _id: String,
     title: String,
+    patreon_post_id: String,
     content: String,
     images_url: Vec<String>,
     file_url: String,
@@ -30,6 +29,30 @@ pub struct Post {
     created_at: DateTime,
     #[serde(with = "bson_datetime_as_rfc3339_string")]
     updated_at: DateTime,
+    #[serde(with = "bson_datetime_as_rfc3339_string")]
+    synced_at: DateTime,
+}
+
+impl Post {
+    pub fn new_for_sync(
+        patreon_post_id: &str,
+        title: &str,
+        content: &str,
+        date_string: &str,
+    ) -> Self {
+        Post {
+            _id: ObjectId::new().to_hex(),
+            patreon_post_id: patreon_post_id.to_string(),
+            title: title.to_string(),
+            content: content.to_string(),
+            images_url: vec![],
+            file_url: "".to_string(),
+            mod_type: "".to_string(),
+            created_at: DateTime::now(),
+            updated_at: DateTime::from_chrono(get_chrono_dt_from_string(date_string.to_string())),
+            synced_at: DateTime::now(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -55,21 +78,8 @@ pub struct EditPostRequest {
 pub async fn get_all_posts(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<Post>>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
-
-    // let filter = doc! {};
-    // let find_option = FindOptions::builder().build();
-
-    match typed_collection.find(None, None).await {
-        Ok(cursor) => {
-            // let posts = cursor.try_collect().await.unwrap_or_else(|_| vec![]);
-            let posts = cursor.try_collect().await.unwrap_or_else(|err| {
-                error!("{}", err.to_string());
-                vec![]
-            });
-
-            Ok(Json(posts))
-        }
+    match get_all_docs::<Post>(state.mongo).await {
+        Ok(posts) => Ok(Json(posts)),
         Err(err) => {
             let error_message = err.to_string();
             error!("{}", error_message.clone());
@@ -82,8 +92,6 @@ pub async fn get_post_by_id(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Post>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
-
     let target_post_object_id_result = ObjectId::from_str(&id);
 
     if target_post_object_id_result.is_err() {
@@ -97,7 +105,7 @@ pub async fn get_post_by_id(
         "_id": target_post_object_id_result.unwrap()
     };
 
-    match typed_collection.find_one(filter, None).await {
+    match find_one_doc::<Post>(state.mongo, filter).await {
         Ok(result) => match result {
             Some(post) => Ok(Json(post)),
             None => {
@@ -121,10 +129,9 @@ pub async fn create_new_post(
     State(state): State<AppState>,
     Json(req): Json<NewPostRequest>,
 ) -> Result<Json<Bson>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
-
     let new_post = Post {
         _id: ObjectId::new().to_hex(),
+        patreon_post_id: "".to_string(),
         title: req.title,
         content: req.content,
         images_url: req.imagesUrl,
@@ -132,12 +139,14 @@ pub async fn create_new_post(
         mod_type: req.modType,
         created_at: DateTime::now(),
         updated_at: DateTime::now(),
+        synced_at: DateTime::now(),
     };
 
-    match typed_collection.insert_one(new_post, None).await {
-        Ok(result) => {
-            info!("New Post Created");
-            Ok(Json(result.inserted_id))
+    match insert_one_doc::<Post>(state.mongo, new_post).await {
+        Ok(inserted_id) => {
+            let object_id = inserted_id.as_object_id().unwrap();
+            info!("New Post Created {}", object_id.to_hex());
+            Ok(Json(inserted_id))
         }
         Err(err) => {
             let error_message = err.to_string();
@@ -152,8 +161,6 @@ pub async fn edit_post(
     Path(id): Path<String>,
     Json(req): Json<EditPostRequest>,
 ) -> Result<Json<Post>, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
-
     let target_post_object_id_result = ObjectId::from_str(&id);
 
     if target_post_object_id_result.is_err() {
@@ -175,14 +182,12 @@ pub async fn edit_post(
         },
     };
 
-    match typed_collection
-        .find_one_and_update(filter, update, None)
-        .await
-    {
+    match edit_one_doc::<Post>(state.mongo, filter, update).await {
         Ok(result) => match result {
             Some(post) => {
                 info!("Post {} edited", post._id);
-                Ok(Json(post))},
+                Ok(Json(post))
+            }
             None => {
                 error!("The post with id: {} not found!", id);
                 Err((
@@ -204,8 +209,6 @@ pub async fn delete_post(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
-
     let target_post_object_id_result = ObjectId::from_str(&id);
 
     if target_post_object_id_result.is_err() {
@@ -219,7 +222,7 @@ pub async fn delete_post(
         "_id": target_post_object_id_result.unwrap()
     };
 
-    match typed_collection.find_one_and_delete(filter, None).await {
+    match delete_one_doc::<Post>(state.mongo, filter).await {
         Ok(result) => match result {
             Some(_) => Ok(StatusCode::OK),
             None => {
@@ -242,11 +245,9 @@ pub async fn delete_post(
 pub async fn delete_all_posts(
     State(state): State<AppState>,
 ) -> Result<StatusCode, impl IntoResponse> {
-    let typed_collection = &state.mongo.collection::<Post>("posts");
-
-    match typed_collection.delete_many(doc! {}, None).await {
-        Ok(result) => {
-            info!("{} posts deleted", result.deleted_count);
+    match delete_all_docs::<Post>(state.mongo).await {
+        Ok(deleted_count) => {
+            info!("{} posts deleted", deleted_count);
             Ok(StatusCode::OK)
         }
         Err(err) => {
@@ -257,8 +258,42 @@ pub async fn delete_all_posts(
     }
 }
 
+pub async fn sync_posts(State(state): State<AppState>) -> StatusCode {
+    let redis = state.redis.clone();
+
+    let is_running_job_exist_result = check_sync_job_exists(redis.clone());
+    if is_running_job_exist_result.is_err() {
+        error!("fail to check sync job");
+        return StatusCode::OK;
+    }
+
+    let is_running_job_exist = is_running_job_exist_result.unwrap();
+    if is_running_job_exist {
+        info!("there is already running job!");
+        return StatusCode::OK;
+    }
+
+    // tokio::spawn(async move {
+    //     sync_post(x, state.patreon_access_token).await;
+    // });
+    let publish_result = publish_message(redis, Message::new(String::from("Sync")));
+
+    if publish_result.is_err() {
+        error!("Failed to publish message: {}", publish_result.unwrap_err());
+    }
+
+    StatusCode::OK
+}
+
+use crate::dao::{
+    delete_all_docs, delete_one_doc, edit_one_doc, find_one_doc, get_all_docs, insert_one_doc,
+};
+use crate::redis_pubsub::message::Message;
+use crate::redis_pubsub::pubsub::publish_message;
+use crate::util::get_chrono_dt_from_string;
 #[cfg(test)]
 use test_env_helpers::*;
+use crate::sync_job::check_sync_job_exists;
 
 #[before_all]
 #[cfg(test)]
@@ -266,11 +301,11 @@ mod tests {
     use super::*;
     use crate::test_util::test_util::{
         count_all_posts, create_test_state, find_post_by_id, generate_port_number,
-        get_db_connection_uri, get_mongo_image, insert_test_post, populate_test_data,
+        get_db_connection_uri, get_mongo_image, get_redis_connection_uri, get_redis_image,
+        insert_test_post, populate_test_data,
     };
     use mongodb::Client;
-    use serde_json::to_string;
-    use testcontainers::clients;
+    use testcontainers_modules::{redis::REDIS_PORT, testcontainers::clients};
 
     async fn before_all() {
         // let docker = clients::Cli::default();
@@ -284,14 +319,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
         populate_test_data(&port);
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db);
+        let state = create_test_state(test_db, redis_client);
 
         let result = get_all_posts(State(state)).await;
 
@@ -308,14 +347,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
         populate_test_data(&port);
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db);
+        let state = create_test_state(test_db, redis_client);
 
         let result = get_post_by_id(State(state), Path("aaaa".to_string())).await;
 
@@ -331,13 +374,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
+
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db.clone());
+        let state = create_test_state(test_db.clone(), redis_client);
 
         let new_post_title = "aa".to_string();
         let new_post_content = "content".to_string();
@@ -347,6 +395,7 @@ mod tests {
 
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
+            patreon_post_id: "123123".to_string(),
             title: new_post_title.clone(),
             content: new_post_content.clone(),
             images_url: new_post_images_url.clone(),
@@ -354,9 +403,10 @@ mod tests {
             mod_type: new_post_mod_type.clone(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
+            synced_at: DateTime::now(),
         };
 
-        let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
+        let inserted_post_object_id = insert_test_post(test_db, new_post).await;
         let object_id_string = inserted_post_object_id.to_hex();
 
         let result = get_post_by_id(State(state), Path(object_id_string)).await;
@@ -375,13 +425,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
+
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db.clone());
+        let state = create_test_state(test_db.clone(), redis_client);
 
         let new_post_title = "aa".to_string();
         let new_post_content = "content".to_string();
@@ -413,16 +468,22 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
+
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db.clone());
+        let state = create_test_state(test_db.clone(), redis_client);
 
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
+            patreon_post_id: "123123".to_string(),
             title: "test post".to_string(),
             content: "test content".to_string(),
             images_url: vec![],
@@ -430,6 +491,7 @@ mod tests {
             mod_type: "aaa".to_string(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
+            synced_at: DateTime::now(),
         };
 
         let updated_title = "updated test post".to_string();
@@ -471,16 +533,22 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
+        let redis_node = docker.run(redis_img);
+
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db.clone());
+        let state = create_test_state(test_db.clone(), redis_client);
 
         let new_post = Post {
             _id: ObjectId::new().to_hex(),
+            patreon_post_id: "123123".to_string(),
             title: "test post".to_string(),
             content: "test content".to_string(),
             images_url: vec![],
@@ -488,6 +556,7 @@ mod tests {
             mod_type: "aaa".to_string(),
             created_at: DateTime::now(),
             updated_at: DateTime::now(),
+            synced_at: DateTime::now(),
         };
 
         let inserted_post_object_id = insert_test_post(test_db.clone(), new_post).await;
@@ -506,14 +575,18 @@ mod tests {
         let docker = clients::Cli::default();
         let port = generate_port_number();
         let mongo_img = get_mongo_image(&port);
+        let redis_img = get_redis_image();
         let _c = docker.run(mongo_img);
-        populate_test_data(&port);
+        let redis_node = docker.run(redis_img);
+
         let uri = get_db_connection_uri(&port);
+        let redis_uri = get_redis_connection_uri(&redis_node.get_host_port_ipv4(REDIS_PORT));
         let client = Client::with_uri_str(uri).await.unwrap();
+        let redis_client = redis::Client::open(redis_uri.as_ref()).unwrap();
 
         let test_db = client.database("test_db");
 
-        let state = create_test_state(test_db.clone());
+        let state = create_test_state(test_db.clone(), redis_client);
 
         let result = delete_all_posts(State(state)).await;
 
